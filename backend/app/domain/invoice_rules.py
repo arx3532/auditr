@@ -1,9 +1,10 @@
+import re
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
 from app.domain.money import ZERO, to_money
-import re
+
 
 class InvoiceStatus(StrEnum):
     DRAFT = "draft"
@@ -79,6 +80,7 @@ def validate_credit_note(
         raise ValueError("Credit note must be greater than zero")
     if credit > remaining:
         raise ValueError("Credit note exceeds the amount still creditable")
+
 
 _FY_PATTERN = re.compile(r"(\d{4})-(\d{2})")
 

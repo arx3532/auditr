@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.deps import UserDep
-from app.api.routes import customers, invoices, profile
+from app.api.routes import customers, exports, invoices, profile, public, reports
 from app.config import get_settings
 from app.core.errors import DomainError
 from app.db.session import get_db
@@ -17,13 +17,16 @@ app = FastAPI(title="Finance Agent API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
 )
 
 app.include_router(profile.router)
 app.include_router(customers.router)
 app.include_router(invoices.router)
+app.include_router(reports.router)
+app.include_router(exports.router)
+app.include_router(public.router)
 
 
 @app.exception_handler(DomainError)
@@ -50,4 +53,4 @@ def ready(db: Session = Depends(get_db)) -> dict[str, str]:
 
 @app.get("/me")
 def me(user: UserDep) -> dict[str, str | None]:
-    return {"id": str(user.id), "stateCode": user.state_code}
+    return {"id": str(user.id), "stateCode": user.state_code, "businessName": user.business_name}

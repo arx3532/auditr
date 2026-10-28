@@ -1,14 +1,22 @@
+import secrets
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Header, Query, Response
 from fastapi.responses import JSONResponse
 
 from app.api.deps import DbDep, UserDep
 from app.api.mappers import invoice_out, payment_out
-from app.api.schemas import InvoiceIn, InvoiceListOut, InvoiceOut, PaymentIn, PaymentOut
+from app.api.schemas import (
+    InvoiceIn,
+    InvoiceListOut,
+    InvoiceOut,
+    PaymentIn,
+    PaymentOut,
+    ShareLinkOut,
+)
 from app.core.clock import today_ist
-from app.core.errors import NotFound
+from app.core.errors import Conflict, NotFound
 from app.db import repositories as repo
 from app.services import invoicing
 from app.services.idempotency import request_hash, run_idempotent
@@ -129,3 +137,25 @@ def record_payment(
         handler,
     )
     return JSONResponse(status_code=status_code, content=response)
+
+
+@router.post("/{invoice_id}/public-link", response_model=ShareLinkOut)
+def create_public_link(invoice_id: uuid.UUID, user: UserDep, db: DbDep) -> ShareLinkOut:
+    invoice = repo.get_invoice(db, user.id, invoice_id, for_update=True)
+    if invoice is None:
+        raise NotFound("invoice_not_found", "Invoice not found")
+    if invoice.status not in repo.SHAREABLE:
+        raise Conflict("not_shareable", "Only issued invoices can be shared")
+    if invoice.public_token is None:
+        invoice.public_token = secrets.token_urlsafe(32)
+        db.commit()
+    return ShareLinkOut(token=invoice.public_token, path=f"/pay/{invoice.public_token}")
+
+
+@router.delete("/{invoice_id}/public-link", status_code=204, response_class=Response)
+def revoke_public_link(invoice_id: uuid.UUID, user: UserDep, db: DbDep) -> None:
+    invoice = repo.get_invoice(db, user.id, invoice_id, for_update=True)
+    if invoice is None:
+        raise NotFound("invoice_not_found", "Invoice not found")
+    invoice.public_token = None
+    db.commit()

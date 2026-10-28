@@ -1,7 +1,14 @@
 from datetime import date
 from decimal import Decimal
 
-from app.api.schemas import CustomerOut, InvoiceOut, ItemOut, PaymentOut, TaxOut
+from app.api.schemas import (
+    CustomerOut,
+    InvoiceOut,
+    ItemOut,
+    PaymentOut,
+    PublicInvoiceOut,
+    TaxOut,
+)
 from app.db.models import Customer, Invoice, Payment
 from app.domain.gst import SupplyType
 from app.domain.invoice_rules import InvoiceStatus, is_overdue
@@ -24,22 +31,48 @@ def _tax_out(inv: Invoice) -> TaxOut:
     return TaxOut(zero_rated=True, lut_ref=inv.lut_ref)
 
 
-def invoice_out(inv: Invoice, today: date) -> InvoiceOut:
+def _items_out(inv: Invoice) -> list[ItemOut]:
+    return [
+        ItemOut(
+            description=i.description,
+            hsn_sac=i.hsn_sac,
+            taxable_value=money_str(i.taxable_value),
+            gst_rate=_rate(i.gst_rate),
+        )
+        for i in inv.items
+    ]
+
+
+def _status(inv: Invoice, today: date) -> str:
     overdue = is_overdue(InvoiceStatus(inv.status), inv.due_date, today)
+    return "overdue" if overdue else inv.status
+
+
+def invoice_out(inv: Invoice, today: date) -> InvoiceOut:
     return InvoiceOut(
         id=inv.id,
         number=inv.number,
         customer=customer_out(inv.customer),
-        status="overdue" if overdue else inv.status,
-        items=[
-            ItemOut(
-                description=i.description,
-                hsn_sac=i.hsn_sac,
-                taxable_value=money_str(i.taxable_value),
-                gst_rate=_rate(i.gst_rate),
-            )
-            for i in inv.items
-        ],
+        status=_status(inv, today),
+        items=_items_out(inv),
+        tax=_tax_out(inv),
+        subtotal=money_str(inv.subtotal),
+        total=money_str(inv.total),
+        amount_due=money_str(inv.amount_due),
+        issue_date=inv.issue_date,
+        due_date=inv.due_date,
+        public_token=inv.public_token,
+    )
+
+
+def public_invoice_out(inv: Invoice, business_name: str | None, today: date) -> PublicInvoiceOut:
+    """What the customer sees. No internal ids and no customer GSTIN."""
+    return PublicInvoiceOut(
+        number=inv.number,
+        status=_status(inv, today),
+        supplier_name=business_name,
+        customer_name=inv.customer.name,
+        items=_items_out(inv),
         tax=_tax_out(inv),
         subtotal=money_str(inv.subtotal),
         total=money_str(inv.total),

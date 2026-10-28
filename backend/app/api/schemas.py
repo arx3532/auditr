@@ -16,6 +16,7 @@ class RequestModel(ApiModel):
 # ---- requests ----
 class ProfileIn(RequestModel):
     state_code: str = Field(min_length=2, max_length=2)
+    business_name: str | None = Field(default=None, max_length=200)
 
 
 class CustomerIn(RequestModel):
@@ -93,3 +94,92 @@ class PaymentOut(ApiModel):
     cash_received: str
     tds_deducted: str
     paid_on: date = Field(alias="date")
+
+
+class SummaryOut(ApiModel):
+    revenue_this_month: str
+    overdue_count: int
+    overdue_total: str
+
+
+class GstAmountsOut(ApiModel):
+    invoice_count: int
+    taxable_value: str
+    cgst: str
+    sgst: str
+    igst: str
+    total_tax: str
+
+
+class GstMonthOut(GstAmountsOut):
+    month: str
+
+
+class GstSupplyOut(GstAmountsOut):
+    supply_type: str
+
+
+class GstSummaryOut(ApiModel):
+    from_date: date
+    to_date: date
+    months: list[GstMonthOut]
+    by_supply_type: list[GstSupplyOut]
+    totals: GstAmountsOut
+
+
+class HsnRowOut(GstAmountsOut):
+    hsn_sac: str
+
+
+class HsnSummaryOut(ApiModel):
+    from_date: date
+    to_date: date
+    rows: list[HsnRowOut]
+
+
+class TdsRowOut(ApiModel):
+    customer_id: uuid.UUID
+    customer_name: str
+    payment_count: int
+    cash_received: str
+    tds_deducted: str
+
+
+class TdsReportOut(ApiModel):
+    financial_year: str
+    from_date: date
+    to_date: date
+    rows: list[TdsRowOut]
+    total_cash_received: str
+    total_tds_deducted: str
+
+
+class AgingBucketOut(ApiModel):
+    bucket: str
+    invoice_count: int
+    amount_due: str
+
+
+class AgingOut(ApiModel):
+    as_of: date
+    buckets: list[AgingBucketOut]
+    total_due: str
+
+
+class ShareLinkOut(ApiModel):
+    token: str
+    path: str
+
+
+class PublicInvoiceOut(ApiModel):
+    number: str | None = None
+    status: str
+    supplier_name: str | None = None
+    customer_name: str
+    items: list[ItemOut]
+    tax: TaxOut
+    subtotal: str
+    total: str
+    amount_due: str
+    issue_date: date | None = None
+    due_date: date

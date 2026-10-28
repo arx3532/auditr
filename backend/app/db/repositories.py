@@ -6,7 +6,7 @@ from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from app.core.errors import Unprocessable
-from app.db.models import Customer, Invoice, Payment
+from app.db.models import Customer, Invoice, Payment, User
 from app.domain.invoice_rules import InvoiceStatus
 
 LISTABLE_STATUSES = {s.value for s in InvoiceStatus} | {"overdue"}
@@ -81,3 +81,19 @@ def list_invoices(
         rows = rows[:limit]
         next_cursor = _encode_cursor(rows[-1].created_at, rows[-1].id)
     return rows, next_cursor
+
+
+SHAREABLE = [
+    InvoiceStatus.ISSUED.value,
+    InvoiceStatus.PARTIALLY_PAID.value,
+    InvoiceStatus.PAID.value,
+]
+
+
+def get_invoice_by_public_token(db: Session, token: str) -> tuple[Invoice, str | None] | None:
+    row = db.execute(
+        select(Invoice, User.business_name)
+        .join(User, User.id == Invoice.user_id)
+        .where(Invoice.public_token == token, Invoice.status.in_(SHAREABLE))
+    ).first()
+    return None if row is None else (row[0], row[1])
