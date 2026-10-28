@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import Conflict, NotFound, Unprocessable
 from app.db import repositories as repo
 from app.db.models import (
+    Customer,
     Invoice,
     InvoiceItem,
     InvoiceNumberSequence,
@@ -17,7 +18,14 @@ from app.db.models import (
     Payment,
     User,
 )
-from app.domain.gst import LineInput, LineTax, TaxResult, compute_tax, determine_supply_type
+from app.domain.gst import (
+    LineInput,
+    LineTax,
+    SupplyType,
+    TaxResult,
+    compute_tax,
+    determine_supply_type,
+)
 from app.domain.invoice_rules import (
     InvalidTransition,
     InvoiceStatus,
@@ -70,24 +78,21 @@ def _save_entries(
         )
 
 
-def create_draft(
-    db: Session,
-    user: User,
-    *,
-    customer_id: uuid.UUID,
-    due_date: date,
+def _require_supplier_state(user: User) -> str:
+    if user.state_code is None:
+        raise Unprocessable("supplier_state_required", "Set your state first (PUT /me/profile)")
+    return user.state_code
+
+
+def _price_draft(
+    supplier_state: str,
+    customer: Customer,
     items: list[ItemInput],
     lut_ref: str | None,
     today: date,
-) -> Invoice:
-    if user.state_code is None:
-        raise Unprocessable("supplier_state_required", "Set your state first (PUT /me/profile)")
-    customer = repo.get_customer(db, user.id, customer_id)
-    if customer is None:
-        raise NotFound("customer_not_found", "Customer not found")
-    if due_date < today:
-        raise Unprocessable("due_date_in_past", "Due date cannot be in the past")
-
+) -> tuple[SupplyType, str | None, TaxResult]:
+    """Validate line items and compute tax. Create and edit both use this, so they
+    always follow the same rules."""
     lines: list[LineInput] = []
     for item in items:
         if not item.description.strip():
@@ -101,10 +106,9 @@ def create_draft(
             raise Unprocessable("invalid_item", "Invalid taxable value or GST rate") from None
         except ValueError as exc:
             raise Unprocessable("invalid_item", str(exc)) from None
-
     lut = (lut_ref or "").strip() or None
     supply = determine_supply_type(
-        user.state_code, customer.state_code, export_with_lut=lut is not None
+        supplier_state, customer.state_code, export_with_lut=lut is not None
     )
     try:
         rules = get_rule_set(today)
@@ -115,22 +119,22 @@ def create_draft(
         raise Unprocessable("invalid_invoice", str(exc)) from None
     if tax.subtotal <= ZERO:
         raise Unprocessable("zero_invoice", "Invoice value must be greater than zero")
+    return supply, lut, tax
 
-    invoice = Invoice(
-        user_id=user.id,
-        customer=customer,
-        status=InvoiceStatus.DRAFT.value,
-        supply_type=supply.value,
-        lut_ref=lut,
-        due_date=due_date,
-        subtotal=tax.subtotal,
-        cgst=tax.cgst,
-        sgst=tax.sgst,
-        igst=tax.igst,
-        total=tax.total,
-        amount_due=tax.total,
-    )
-    invoice.items = [
+
+def _apply_pricing(invoice: Invoice, supply: SupplyType, lut: str | None, tax: TaxResult) -> None:
+    invoice.supply_type = supply.value
+    invoice.lut_ref = lut
+    invoice.subtotal = tax.subtotal
+    invoice.cgst = tax.cgst
+    invoice.sgst = tax.sgst
+    invoice.igst = tax.igst
+    invoice.total = tax.total
+    invoice.amount_due = tax.total
+
+
+def _build_items(items: list[ItemInput], tax: TaxResult) -> list[InvoiceItem]:
+    return [
         InvoiceItem(
             position=index,
             description=item.description.strip(),
@@ -143,7 +147,110 @@ def create_draft(
         )
         for index, (item, line_tax) in enumerate(zip(items, tax.lines, strict=True))
     ]
+
+
+def create_draft(
+    db: Session,
+    user: User,
+    *,
+    customer_id: uuid.UUID,
+    due_date: date,
+    items: list[ItemInput],
+    lut_ref: str | None,
+    today: date,
+) -> Invoice:
+    supplier_state = _require_supplier_state(user)
+    customer = repo.get_customer(db, user.id, customer_id)
+    if customer is None:
+        raise NotFound("customer_not_found", "Customer not found")
+    if due_date < today:
+        raise Unprocessable("due_date_in_past", "Due date cannot be in the past")
+
+    supply, lut, tax = _price_draft(supplier_state, customer, items, lut_ref, today)
+    invoice = Invoice(
+        user_id=user.id,
+        customer=customer,
+        status=InvoiceStatus.DRAFT.value,
+        due_date=due_date,
+    )
+    _apply_pricing(invoice, supply, lut, tax)
+    invoice.items = _build_items(items, tax)
     db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+def update_draft(
+    db: Session,
+    user: User,
+    invoice_id: uuid.UUID,
+    *,
+    customer_id: uuid.UUID | None,
+    due_date: date | None,
+    items: list[ItemInput] | None,
+    lut_ref: str | None,
+    lut_ref_given: bool,
+    today: date,
+) -> Invoice:
+    """Edit a draft and recompute its tax. The row is locked first, so an edit and an
+    issue running at the same moment cannot both win: whichever locks second sees
+    the other's result (an edit after an issue gets 'invalid_state')."""
+    supplier_state = _require_supplier_state(user)
+    invoice = repo.get_invoice(db, user.id, invoice_id, for_update=True)
+    if invoice is None:
+        raise NotFound("invoice_not_found", "Invoice not found")
+    if invoice.status != InvoiceStatus.DRAFT.value:
+        raise Conflict(
+            "invalid_state", f"Only drafts can be edited, this invoice is {invoice.status}"
+        )
+
+    customer = invoice.customer
+    if customer_id is not None and customer_id != invoice.customer_id:
+        found = repo.get_customer(db, user.id, customer_id)
+        if found is None:
+            raise NotFound("customer_not_found", "Customer not found")
+        customer = found
+
+    new_due = due_date or invoice.due_date
+    if new_due < today:
+        raise Unprocessable("due_date_in_past", "Due date cannot be in the past")
+
+    item_inputs = (
+        items
+        if items is not None
+        else [
+            ItemInput(i.description, i.hsn_sac, str(i.taxable_value), str(i.gst_rate))
+            for i in invoice.items
+        ]
+    )
+    lut_input = lut_ref if lut_ref_given else invoice.lut_ref
+
+    # Everything is validated and priced BEFORE anything is changed, so a rejected
+    # edit leaves the draft exactly as it was.
+    supply, lut, tax = _price_draft(supplier_state, customer, item_inputs, lut_input, today)
+    invoice.customer = customer
+    invoice.due_date = new_due
+    _apply_pricing(invoice, supply, lut, tax)
+    invoice.items = _build_items(item_inputs, tax)
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+def cancel_draft(db: Session, user_id: uuid.UUID, invoice_id: uuid.UUID) -> Invoice:
+    invoice = repo.get_invoice(db, user_id, invoice_id, for_update=True)
+    if invoice is None:
+        raise NotFound("invoice_not_found", "Invoice not found")
+    current = InvoiceStatus(invoice.status)
+    if current is InvoiceStatus.CANCELLED:
+        return invoice  # repeating the request is harmless
+    if current is not InvoiceStatus.DRAFT:
+        raise Conflict(
+            "invalid_state", "Only drafts can be cancelled. Issued invoices need a credit note"
+        )
+    ensure_transition(current, InvoiceStatus.CANCELLED)
+    invoice.status = InvoiceStatus.CANCELLED.value
     db.commit()
     db.refresh(invoice)
     return invoice

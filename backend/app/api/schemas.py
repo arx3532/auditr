@@ -39,6 +39,13 @@ class InvoiceIn(RequestModel):
     lut_ref: str | None = Field(default=None, max_length=100)
 
 
+class InvoiceUpdateIn(RequestModel):
+    customer_id: uuid.UUID | None = None
+    due_date: date | None = None
+    items: list[ItemIn] | None = Field(default=None, min_length=1, max_length=50)
+    lut_ref: str | None = Field(default=None, max_length=100)
+
+
 class PaymentIn(RequestModel):
     cash_received: str
     tds_deducted: str = "0.00"

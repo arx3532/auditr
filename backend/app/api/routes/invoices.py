@@ -11,12 +11,13 @@ from app.api.schemas import (
     InvoiceIn,
     InvoiceListOut,
     InvoiceOut,
+    InvoiceUpdateIn,
     PaymentIn,
     PaymentOut,
     ShareLinkOut,
 )
 from app.core.clock import today_ist
-from app.core.errors import Conflict, NotFound
+from app.core.errors import Conflict, NotFound, Unprocessable
 from app.db import repositories as repo
 from app.services import invoicing
 from app.services.idempotency import request_hash, run_idempotent
@@ -45,6 +46,39 @@ def create_invoice(body: InvoiceIn, user: UserDep, db: DbDep) -> InvoiceOut:
         today=today,
     )
     return invoice_out(invoice, today)
+
+
+@router.patch("/{invoice_id}", response_model=InvoiceOut, response_model_exclude_none=True)
+def update_invoice(
+    invoice_id: uuid.UUID, body: InvoiceUpdateIn, user: UserDep, db: DbDep
+) -> InvoiceOut:
+    if not body.model_fields_set:
+        raise Unprocessable("nothing_to_update", "Send at least one field to change")
+    today = today_ist()
+    invoice = invoicing.update_draft(
+        db,
+        user,
+        invoice_id,
+        customer_id=body.customer_id,
+        due_date=body.due_date,
+        items=(
+            None
+            if body.items is None
+            else [
+                invoicing.ItemInput(i.description, i.hsn_sac, i.taxable_value, i.gst_rate)
+                for i in body.items
+            ]
+        ),
+        lut_ref=body.lut_ref,
+        lut_ref_given="lut_ref" in body.model_fields_set,
+        today=today,
+    )
+    return invoice_out(invoice, today)
+
+
+@router.post("/{invoice_id}/cancel", response_model=InvoiceOut, response_model_exclude_none=True)
+def cancel_invoice(invoice_id: uuid.UUID, user: UserDep, db: DbDep) -> InvoiceOut:
+    return invoice_out(invoicing.cancel_draft(db, user.id, invoice_id), today_ist())
 
 
 @router.get("", response_model=InvoiceListOut, response_model_exclude_none=True)
