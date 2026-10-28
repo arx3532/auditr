@@ -1,0 +1,10 @@
+{
+    "_comment" : "Demo rule sets. VErified against official CBIC notifications. Not tax advice",
+    "rule_sets" : [
+        {
+            "effective_from" : "2025-09-22",
+            "allowed_gst_rates" : ["0", "5", "18", "40"],
+            "source" : "56th GST Council decisions; Central Tax(Rate) notifications effective 22 Sep 2025."
+        }
+    ]
+}
