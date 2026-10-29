@@ -6,13 +6,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.deps import UserDep
-from app.api.routes import customers, exports, invoices, profile, public, reports
+from app.api.routes import chat, customers, exports, invoices, profile, public, reports
 from app.config import get_settings
 from app.core.errors import DomainError
+from app.core.lifespan import lifespan
 from app.db.session import get_db
 
 settings = get_settings()
-app = FastAPI(title="Finance Agent API")
+app = FastAPI(title="Finance Agent API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +28,7 @@ app.include_router(invoices.router)
 app.include_router(reports.router)
 app.include_router(exports.router)
 app.include_router(public.router)
+app.include_router(chat.router)
 
 
 @app.exception_handler(DomainError)

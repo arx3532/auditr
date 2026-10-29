@@ -48,6 +48,15 @@ class ItemInput:
     gst_rate: str
 
 
+@dataclass(frozen=True)
+class PaymentPlan:
+    paid_on: date
+    cash_received: Decimal
+    tds_deducted: Decimal
+    amount_due_after: Decimal
+    status_after: InvoiceStatus
+
+
 def tax_result_from(invoice: Invoice) -> TaxResult:
     """Rebuild the stored tax so issuing posts exactly what the user approved."""
     lines = tuple(
@@ -304,20 +313,15 @@ def issue_invoice(db: Session, user_id: uuid.UUID, invoice_id: uuid.UUID, today:
     return invoice
 
 
-def record_payment(
-    db: Session,
-    user_id: uuid.UUID,
-    invoice_id: uuid.UUID,
+def _plan_payment(
+    invoice: Invoice,
     *,
     cash_received: str,
     tds_deducted: str,
     paid_on: date | None,
     today: date,
-) -> tuple[Invoice, Payment]:
-    """Does not commit: the caller owns the transaction (see run_idempotent)."""
-    invoice = repo.get_invoice(db, user_id, invoice_id, for_update=True)
-    if invoice is None:
-        raise NotFound("invoice_not_found", "Invoice not found")
+) -> PaymentPlan:
+    """All payment checks, with no writes. Recording and previewing both use this."""
     current = InvoiceStatus(invoice.status)
     if current not in (InvoiceStatus.ISSUED, InvoiceStatus.PARTIALLY_PAID):
         raise Conflict("invalid_state", f"Cannot record a payment on a {invoice.status} invoice")
@@ -338,25 +342,74 @@ def record_payment(
     new_status = status_after_payment(invoice.total, settlement.amount_due_after)
     if new_status != current:  # a second partial payment keeps the same status
         ensure_transition(current, new_status)
-    invoice.amount_due = settlement.amount_due_after
-    invoice.status = new_status.value
+    return PaymentPlan(
+        when,
+        settlement.cash_received,
+        settlement.tds_deducted,
+        settlement.amount_due_after,
+        new_status,
+    )
 
+
+def preview_payment(
+    db: Session,
+    user_id: uuid.UUID,
+    invoice_id: uuid.UUID,
+    *,
+    cash_received: str,
+    tds_deducted: str,
+    paid_on: date | None,
+    today: date,
+) -> PaymentPlan:
+    invoice = repo.get_invoice(db, user_id, invoice_id)
+    if invoice is None:
+        raise NotFound("invoice_not_found", "Invoice not found")
+    return _plan_payment(
+        invoice,
+        cash_received=cash_received,
+        tds_deducted=tds_deducted,
+        paid_on=paid_on,
+        today=today,
+    )
+
+
+def record_payment(
+    db: Session,
+    user_id: uuid.UUID,
+    invoice_id: uuid.UUID,
+    *,
+    cash_received: str,
+    tds_deducted: str,
+    paid_on: date | None,
+    today: date,
+) -> tuple[Invoice, Payment]:
+    """Does not commit: the caller owns the transaction."""
+    invoice = repo.get_invoice(db, user_id, invoice_id, for_update=True)
+    if invoice is None:
+        raise NotFound("invoice_not_found", "Invoice not found")
+    plan = _plan_payment(
+        invoice,
+        cash_received=cash_received,
+        tds_deducted=tds_deducted,
+        paid_on=paid_on,
+        today=today,
+    )
+    invoice.amount_due = plan.amount_due_after
+    invoice.status = plan.status_after.value
+
+    # The id is set here (not left to the database default) because the ledger
+    # entries need it before anything is flushed.
     payment = Payment(
+        id=uuid.uuid4(),
         user_id=user_id,
         invoice_id=invoice.id,
-        cash_received=settlement.cash_received,
-        tds_deducted=settlement.tds_deducted,
-        paid_on=when,
+        cash_received=plan.cash_received,
+        tds_deducted=plan.tds_deducted,
+        paid_on=plan.paid_on,
     )
     db.add(payment)
-    # Persist the payment within the current transaction so its ID is available.
-    db.flush()
     _save_entries(
-        db,
-        user_id,
-        "payment",
-        payment.id,
-        post_payment(settlement.cash_received, settlement.tds_deducted),
+        db, user_id, "payment", payment.id, post_payment(plan.cash_received, plan.tds_deducted)
     )
     db.flush()
     return invoice, payment

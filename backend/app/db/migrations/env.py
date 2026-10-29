@@ -28,6 +28,11 @@ target_metadata = Base.metadata
 # ... etc.
 
 
+def include_object(obj, name, type_, reflected, compare_to):  # type: ignore[no-untyped-def]
+    """Keep Alembic away from the tables LangGraph creates for its checkpoints."""
+    return not (type_ == "table" and name is not None and name.startswith("checkpoint"))
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 

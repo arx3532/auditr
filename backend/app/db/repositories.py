@@ -2,11 +2,11 @@ import base64
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.core.errors import Unprocessable
-from app.db.models import Customer, Invoice, Payment, User
+from app.db.models import ChatThread, Customer, Invoice, Payment, User
 from app.domain.invoice_rules import InvoiceStatus
 
 LISTABLE_STATUSES = {s.value for s in InvoiceStatus} | {"overdue"}
@@ -97,3 +97,66 @@ def get_invoice_by_public_token(db: Session, token: str) -> tuple[Invoice, str |
         .where(Invoice.public_token == token, Invoice.status.in_(SHAREABLE))
     ).first()
     return None if row is None else (row[0], row[1])
+
+
+def get_invoice_by_number(db: Session, user_id: uuid.UUID, number: str) -> Invoice | None:
+    return db.scalar(select(Invoice).where(Invoice.user_id == user_id, Invoice.number == number))
+
+
+def find_customers(db: Session, user_id: uuid.UUID, query: str, limit: int = 6) -> list[Customer]:
+    """Exact name match (ignoring case) first, then a 'contains' match."""
+    text = query.strip()
+    exact = list(
+        db.scalars(
+            select(Customer)
+            .where(Customer.user_id == user_id, func.lower(Customer.name) == text.lower())
+            .limit(limit)
+        )
+    )
+    if exact:
+        return exact
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    stmt = (
+        select(Customer)
+        .where(Customer.user_id == user_id, Customer.name.ilike(f"%{escaped}", escape="\\"))
+        .order_by(Customer.name)
+        .limit(limit)
+    )
+    return list(db.scalars(stmt))
+
+
+def search_invoices(
+    db: Session,
+    user_id: uuid.UUID,
+    *,
+    status: str | None,
+    customer_id: uuid.UUID | None,
+    today: date,
+    limit: int,
+) -> list[Invoice]:
+    stmt = select(Invoice).where(Invoice.user_id == user_id)
+    if customer_id is not None:
+        stmt = stmt.where(Invoice.customer_id == customer_id)
+    if status == "overdue":
+        stmt = stmt.where(Invoice.status.in_(OPEN_STATUSES), Invoice.due_date < today)
+    elif status is not None:
+        stmt = stmt.where(Invoice.status == status)
+    stmt = stmt.order_by(Invoice.created_at.desc(), Invoice.id.desc()).limit(limit)
+    return list(db.scalars(stmt))
+
+
+def create_thread(db: Session, user_id: uuid.UUID) -> ChatThread:
+    thread = ChatThread(user_id=user_id)
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+    return thread
+
+
+def get_thread(
+    db: Session, user_id: uuid.UUID, thread_id: uuid.UUID, *, for_update: bool = False
+) -> ChatThread | None:
+    stmt = select(ChatThread).where(ChatThread.id == thread_id, ChatThread.user_id == user_id)
+    if for_update:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    return db.scalar(stmt)

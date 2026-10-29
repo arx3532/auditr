@@ -1,5 +1,6 @@
 import uuid
 from datetime import date
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
@@ -190,3 +191,21 @@ class PublicInvoiceOut(ApiModel):
     amount_due: str
     issue_date: date | None = None
     due_date: date
+
+
+class ChatIn(RequestModel):
+    thread_id: uuid.UUID | None = None
+    message: str = Field(min_length=1, max_length=2000)
+
+
+class ResumeIn(RequestModel):
+    thread_id: uuid.UUID
+    approval_id: uuid.UUID
+    decision: Literal["approve", "reject", "edit"]
+    edits: dict[str, Any] | None = None
+
+
+class PaymentEditIn(RequestModel):
+    cash_received: str | None = None
+    tds_deducted: str | None = None
+    paid_on: date | None = Field(default=None, alias="date")

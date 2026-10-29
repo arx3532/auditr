@@ -1,8 +1,11 @@
 import os
 
+from tests import _loop  # noqa: F401
+
 os.environ["DATABASE_URL"] = "postgresql+psycopg://finagent:finagent@localhost:5432/finagent_test"
 os.environ["CLERK_JWKS_URL"] = "https://test.example.com/.well-known/jwks.json"
 os.environ["CLERK_ISSUER"] = "https://test.example.com"
+os.environ["NVIDIA_API_KEY"] = ""  # tests never use a real key
 
 import time
 from collections.abc import Iterator

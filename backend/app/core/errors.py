@@ -17,3 +17,11 @@ class Conflict(DomainError):
 
 class Unprocessable(DomainError):
     status_code = 422
+
+
+class ServiceUnavailable(DomainError):
+    status_code = 503
+
+
+class TooManyRequests(DomainError):
+    status_code = 429

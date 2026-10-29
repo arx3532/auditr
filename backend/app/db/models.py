@@ -165,3 +165,34 @@ class IdempotencyKey(Base):
     response_status: Mapped[int | None] = mapped_column(Integer, default=None)
     response_body: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ChatThread(Base):
+    """One conversation. Its id is also the LangGraph thread id. The pending_* columns
+    describe the single approval the conversation is waiting on, if any."""
+
+    __tablename__ = "chat_threads"
+    __table_args__ = (
+        CheckConstraint(
+            "pending_kind IS NULL OR pending_kind IN ('issue_invoice','record_payment')",
+            name="pending_kind_valid",
+        ),
+        CheckConstraint(
+            "(pending_approval_id IS NULL) = (pending_kind IS NULL) "
+            "AND (pending_approval_id IS NULL) = (pending_expires_at IS NULL)",
+            name="pending_fields_together",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    pending_approval_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, default=None)
+    pending_kind: Mapped[str | None] = mapped_column(String(20), default=None)
+    pending_invoice_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("invoices.id"), default=None
+    )
+    pending_args: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
+    pending_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
