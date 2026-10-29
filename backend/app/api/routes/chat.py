@@ -303,7 +303,7 @@ async def resume(
         "outcome": resolved.kind,
         **resolved.extra,
     }
-    command = Command(resume={"outcome": resolved.kind, "message": resolved.message})
+    command: Command[Any] = Command(resume={"outcome": resolved.kind, "message": resolved.message})
     events = _stream_graph(graph, command, body.thread_id, user_id, lead=[lead])
     return _sse_response(events, body.thread_id)
 
