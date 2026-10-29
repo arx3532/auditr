@@ -5,6 +5,9 @@ import { ProductVisual } from '@/components/marketing/ProductVisual'
 import { buttonVariants } from '@/components/ui/button'
 import { siteConfig } from '@/config/site'
 
+// "Say it. Review it. Issue it." becomes three phrases so the middle one can be highlighted.
+const sentences = siteConfig.tagline.split(/(?<=\.)\s+/)
+
 export function HeroSection() {
   return (
     <section className="relative isolate overflow-hidden px-4 pt-12 pb-16 sm:px-6 sm:pt-20 sm:pb-24 lg:px-8">
@@ -12,7 +15,7 @@ export function HeroSection() {
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute -top-24 left-1/2 h-[28rem] w-[46rem] max-w-full -translate-x-1/2 rounded-full bg-secondary/80 blur-3xl" />
         <div className="absolute top-8 right-[6%] h-64 w-64 rounded-full bg-accent/15 blur-3xl" />
-        <div className="absolute top-44 left-[4%] h-56 w-56 rounded-full bg-warning/15 blur-3xl" />
+        <div className="absolute top-44 left-[4%] h-56 w-56 rounded-full bg-highlight/25 blur-3xl" />
       </div>
 
       <div className="mx-auto max-w-5xl text-center">
@@ -26,9 +29,19 @@ export function HeroSection() {
           <span>Deterministic tax calculation • Human-in-the-loop approval</span>
         </div>
 
-        {/* Semantic single <h1> headline: forest green fading to coral */}
-        <h1 className="bg-linear-to-r from-primary from-45% to-accent bg-clip-text pb-1 text-3xl font-extrabold tracking-tight text-balance text-transparent sm:text-5xl lg:text-6xl">
-          {siteConfig.tagline}
+        {/* Semantic single <h1>: the middle sentence is highlighted in yellow, the last in orange */}
+        <h1 className="text-3xl font-extrabold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
+          {sentences.length === 3 ? (
+            <>
+              {sentences[0]}{' '}
+              <span className="rounded-md bg-highlight px-2 text-highlight-foreground box-decoration-clone">
+                {sentences[1]}
+              </span>{' '}
+              <span className="text-primary">{sentences[2]}</span>
+            </>
+          ) : (
+            siteConfig.tagline
+          )}
         </h1>
 
         {/* One-sentence plain, specific subhead */}

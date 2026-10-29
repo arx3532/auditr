@@ -14,8 +14,8 @@ const features = [
     title: 'Tax logic in tested code',
     description:
       'GST and TDS calculations are executed by deterministic, unit-tested backend code. The AI extracts parameters but never calculates tax math.',
-    card: 'from-accent/10',
-    chip: 'bg-accent/15 text-accent',
+    card: 'from-highlight/20',
+    chip: 'bg-highlight/35 text-highlight-foreground',
   },
   {
     icon: BookOpenIcon,
@@ -30,8 +30,8 @@ const features = [
     title: 'Safe retries',
     description:
       'Write endpoints use idempotent request keys. Network timeouts or duplicate clicks will never produce duplicate invoices or ledger entries.',
-    card: 'from-warning/15',
-    chip: 'bg-warning/25 text-warning-foreground dark:text-warning',
+    card: 'from-success/10',
+    chip: 'bg-success/20 text-success',
   },
 ]
 

@@ -7,9 +7,9 @@ const steps = [
     description:
       'Send a plain chat message specifying the client, services provided, payment terms, and amount.',
     icon: MessageSquareIcon,
-    card: 'border-t-accent',
-    badge: 'bg-accent/20',
-    iconColor: 'text-accent',
+    card: 'border-t-primary',
+    badge: 'bg-primary/15',
+    iconColor: 'text-primary',
   },
   {
     number: '2',
@@ -17,9 +17,9 @@ const steps = [
     description:
       'The AI extracts structured data. Tested, deterministic code calculates GST, TDS, and ledger entries.',
     icon: FileTextIcon,
-    card: 'border-t-primary',
-    badge: 'bg-primary/15',
-    iconColor: 'text-primary',
+    card: 'border-t-highlight',
+    badge: 'bg-highlight/40',
+    iconColor: 'text-highlight-foreground',
   },
   {
     number: '3',

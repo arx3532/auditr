@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none" xmlns:c2pa="http://c2pa.org/manifest">
+  <title>Auditr</title>
+  <defs>
+    <linearGradient id="auditr-tile" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF5023"/>
+      <stop offset="1" stop-color="#FF6B1C"/>
+    </linearGradient>
+    <linearGradient id="auditr-glyph" x1="12" y1="14" x2="52" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D93A06"/>
+      <stop offset="1" stop-color="#F05A12"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .tile { fill: url(#auditr-tile) }
+    .glyph { stroke: #FFFBF5 }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #FAF8F5 }
+      .glyph { stroke: url(#auditr-glyph) }
+    }
+  </style>
+  <rect class="tile" width="64" height="64" rx="16"/>
+  <path class="glyph" d="M12 50 L32 14 L52 50" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path class="glyph" d="M24.5 42 L29 46.5 L37 37.5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

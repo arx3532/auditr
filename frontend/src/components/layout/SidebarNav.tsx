@@ -81,6 +81,15 @@ export function SidebarNav({ wide, onNavigate }: SidebarNavProps) {
                 >
                   {item.title}
                 </span>
+                {active ? (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'mr-4 ml-auto size-2 shrink-0 rounded-full bg-highlight transition-opacity duration-150',
+                      wide ? 'opacity-100' : 'opacity-0',
+                    )}
+                  />
+                ) : null}
               </Link>
             </li>
           )

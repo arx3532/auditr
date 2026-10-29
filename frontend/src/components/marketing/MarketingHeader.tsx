@@ -3,7 +3,7 @@
 import { ExternalLinkIcon, MenuIcon, XIcon } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
-
+import { AuditrLogo } from '@/components/common/AuditrLogo'
 import { buttonVariants } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { siteConfig } from '@/config/site'
@@ -20,12 +20,10 @@ export function MarketingHeader() {
           className="flex items-center gap-2.5 font-bold tracking-tight text-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-md"
           aria-label={`${siteConfig.name} - Home`}
         >
-          {/* Subtle wordmark icon */}
-          <span className="flex size-7 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground shadow-xs">
-            {siteConfig.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || 'IA'}
-          </span>
+          {/* Auditr icon */}
+          <AuditrLogo className="size-7" />
           <span className="text-base font-semibold">{siteConfig.name}</span>
-          <span className="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+          <span className="rounded-sm bg-highlight px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-highlight-foreground uppercase">
             Demo
           </span>
         </Link>

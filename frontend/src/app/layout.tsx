@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono'
 
 export const metadata: Metadata = {
   title: {
-    default: 'Invoice Agent',
-    template: '%s | Invoice Agent',
+    default: 'Auditr',
+    template: '%s | Auditr',
   },
   description:
     'A demo AI assistant for Indian freelancers that drafts invoices and issues them only after you confirm.',
@@ -53,7 +53,7 @@ export default function RootLayout({
 
       localization={{
         signIn: {
-          start: { title: 'Welcome to Invoice Agent', subtitle: 'Log in or create an account to continue' },
+          start: { title: 'Welcome to Auditr', subtitle: 'Log in or create an account to continue' },
         },
       }}
       signInUrl="/login"

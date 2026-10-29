@@ -5,7 +5,6 @@ import {
   FileCheckIcon,
   FileTextIcon,
   MessageSquarePlusIcon,
-  ShieldCheckIcon,
   SparklesIcon,
 } from 'lucide-react'
 
@@ -19,25 +18,25 @@ import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { ToolStatus } from './ToolStatus'
 
-/** Each suggestion gets one colour from the palette: coral, green, gold, purple. */
+/** Each suggestion gets one colour from the palette: orange, green, yellow, purple. */
 const SUGGESTIONS = [
   {
     icon: FileTextIcon,
     prompt: 'Invoice AdTech ₹50,000, due the 15th',
-    chip: 'border-accent/30 bg-accent/10 hover:bg-accent/20',
-    badge: 'bg-accent/20 text-accent',
+    chip: 'border-primary/30 bg-primary/10 hover:bg-primary/15',
+    badge: 'bg-primary/15 text-primary',
   },
   {
     icon: SparklesIcon,
     prompt: 'Bill HyperScale $2,400 for cloud API consulting, due end of month',
-    chip: 'border-primary/25 bg-primary/10 hover:bg-primary/15',
-    badge: 'bg-primary/20 text-primary',
+    chip: 'border-success/30 bg-success/10 hover:bg-success/15',
+    badge: 'bg-success/20 text-success',
   },
   {
     icon: CoinsIcon,
     prompt: 'Show all overdue invoices and calculate total amount due',
-    chip: 'border-warning/40 bg-warning/10 hover:bg-warning/20',
-    badge: 'bg-warning/30 text-warning-foreground dark:text-warning',
+    chip: 'border-highlight/50 bg-highlight/15 hover:bg-highlight/25',
+    badge: 'bg-highlight/40 text-highlight-foreground',
   },
   {
     icon: FileCheckIcon,
@@ -74,7 +73,7 @@ export function ChatPanel() {
         <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-6 -z-10 h-80">
           <div className="absolute top-0 left-1/2 h-64 w-[34rem] max-w-full -translate-x-1/2 rounded-full bg-secondary/80 blur-3xl" />
           <div className="absolute top-8 right-0 h-40 w-40 rounded-full bg-accent/15 blur-3xl" />
-          <div className="absolute top-24 left-0 h-36 w-36 rounded-full bg-warning/15 blur-3xl" />
+          <div className="absolute top-24 left-0 h-36 w-36 rounded-full bg-highlight/25 blur-3xl" />
         </div>
       )}
 
@@ -105,11 +104,10 @@ export function ChatPanel() {
       <div className={cn('flex flex-col gap-3', !hasMessages && 'flex-1 justify-center gap-6')}>
         {!hasMessages && (
           <div className="flex flex-col items-center gap-3 text-center">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-primary to-chart-3 text-primary-foreground shadow-md shadow-primary/25">
-              <ShieldCheckIcon className="size-6" aria-hidden="true" />
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/25">  
             </div>
             <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-              What would you like to <span className="text-accent">bill today?</span>
+              What would you like to <span className="text-primary">bill today?</span>
             </h2>
             <p className="max-w-md text-sm text-balance text-muted-foreground sm:text-base">
               Describe the invoice in plain English. You review the draft before anything is issued.

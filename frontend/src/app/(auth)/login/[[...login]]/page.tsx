@@ -1,7 +1,8 @@
 import { SignIn } from '@clerk/nextjs'
-import { FileTextIcon } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
+
+import { AuditrLogo } from '@/components/common/AuditrLogo'
 
 export const metadata: Metadata = { title: 'Log in or sign up' }
 
@@ -10,21 +11,15 @@ export default function LoginPage() {
     <div className="flex w-full max-w-md flex-col items-center gap-6">
       <Link
         href="/"
-        aria-label="Invoice Agent home"
+        aria-label="Auditr home"
         className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground shadow-sm">
-          <FileTextIcon className="size-6" aria-hidden="true" />
-        </span>
+        <AuditrLogo className="size-12 drop-shadow-sm" />
       </Link>
 
       <SignIn
         appearance={{
-          options: {
-            elevation: 'flush',
-            socialButtonsPlacement: 'top',
-            socialButtonsVariant: 'blockButton',
-          },
+          options: { elevation: 'flush', socialButtonsPlacement: 'top', socialButtonsVariant: 'blockButton' },
           elements: {
             rootBox: { width: '100%' },
             cardBox: { width: '100%', boxShadow: 'none' },

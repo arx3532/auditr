@@ -19,8 +19,8 @@ const STATUS_STYLES: Record<
     dotClass: 'bg-destructive animate-pulse',
   },
   issued: {
-    badgeClass: 'border-primary/30 bg-primary/10 text-primary dark:text-emerald-400',
-    dotClass: 'bg-primary dark:bg-emerald-400',
+    badgeClass: 'border-chart-5/30 bg-chart-5/10 text-chart-5',
+    dotClass: 'bg-chart-5',
   },
   partially_paid: {
     badgeClass: 'border-secondary bg-secondary text-secondary-foreground',

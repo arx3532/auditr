@@ -116,6 +116,8 @@ export function DraftInvoiceCard({ approval, canDecide, onDecide, onAskAgain }: 
       aria-labelledby={titleId}
       className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-sm"
     >
+
+      <div className="h-1.5 rounded-t-2xl bg-linear-to-r from-primary via-highlight to-success" />
       <p role="status" className="sr-only">
         {announcement(approval)}
       </p>

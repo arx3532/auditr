@@ -1,9 +1,10 @@
 'use client'
 
 import { UserButton } from '@clerk/nextjs'
-import { FileTextIcon, MenuIcon } from 'lucide-react'
+import { MenuIcon } from 'lucide-react'
 import Link from 'next/link'
 
+import { AuditrLogo } from '@/components/common/AuditrLogo'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 interface AppHeaderProps {
@@ -29,10 +30,11 @@ export function AppHeader({ onMenuClick, menuExpanded }: AppHeaderProps) {
         href="/dashboard"
         className="ml-1 flex items-center gap-2 rounded-lg px-1 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground shadow-sm">
-          <FileTextIcon className="size-4" aria-hidden="true" />
+        <AuditrLogo className="size-8" />
+        <span className="text-lg font-semibold tracking-tight">Auditr</span>
+        <span className="hidden rounded-sm bg-highlight px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-highlight-foreground uppercase sm:inline">
+          Demo
         </span>
-        <span className="text-lg font-medium tracking-tight">Invoice Agent</span>
       </Link>
       <div className="ml-auto flex items-center gap-1">
         <ThemeToggle variant="icon" />
