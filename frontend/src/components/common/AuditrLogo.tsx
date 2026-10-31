@@ -5,15 +5,13 @@ import { cn } from '@/lib/utils'
 interface AuditrLogoProps {
   className?: string
   /**
-   * `tile` is the app icon. Light mode: a cream A and tick on an orange gradient tile.
-   * Dark mode: the opposite, an orange A and tick on a cream tile.
-   * `mark` is the A and tick alone, for a plain background: orange on light pages, cream on dark.
+   * `tile` is the app icon: a cream A and tick on an orange gradient tile.
+   * `mark` is the A and tick alone for a plain background: orange gradient.
    */
   variant?: 'tile' | 'mark'
 }
 
 const CREAM_WHITE = '#FFFBF5'
-const CREAM = '#FAF8F5'
 
 function Glyph({ stroke }: { stroke: string }) {
   return (
@@ -42,6 +40,7 @@ export function AuditrLogo({ className, variant = 'tile' }: AuditrLogoProps) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const tileGradient = `url(#${uid}-tile)`
   const glyphGradient = `url(#${uid}-glyph)`
+  const glyphGradientDark = `url(#${uid}-glyph-dark)`
   const isTile = variant === 'tile'
 
   return (
@@ -57,22 +56,31 @@ export function AuditrLogo({ className, variant = 'tile' }: AuditrLogoProps) {
           <stop offset="0" stopColor="#FF5023" />
           <stop offset="1" stopColor="#FF6B1C" />
         </linearGradient>
+
+        {/* Light mode glyph gradient */}
         <linearGradient id={`${uid}-glyph`} x1="12" y1="14" x2="52" y2="50" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#D93A06" />
           <stop offset="1" stopColor="#F05A12" />
         </linearGradient>
+
+        {/* Dark mode glyph gradient */}
+        <linearGradient id={`${uid}-glyph-dark`} x1="12" y1="14" x2="52" y2="50" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FF6B1C" />
+          <stop offset="1" stopColor="#FF8F50" />
+        </linearGradient>
       </defs>
 
-      {/* Light mode */}
+      {/* Tile background (remains identical in light and dark mode) */}
+      {isTile ? <rect width="64" height="64" rx="16" fill={tileGradient} /> : null}
+
+      {/* Light mode glyph gradient */}
       <g className="dark:hidden">
-        {isTile ? <rect width="64" height="64" rx="16" fill={tileGradient} /> : null}
         <Glyph stroke={isTile ? CREAM_WHITE : glyphGradient} />
       </g>
 
-      {/* Dark mode: the opposite */}
+      {/* Dark mode glyph gradient */}
       <g className="hidden dark:block">
-        {isTile ? <rect width="64" height="64" rx="16" fill={CREAM} /> : null}
-        <Glyph stroke={isTile ? glyphGradient : CREAM_WHITE} />
+        <Glyph stroke={isTile ? CREAM_WHITE : glyphGradientDark} />
       </g>
     </svg>
   )

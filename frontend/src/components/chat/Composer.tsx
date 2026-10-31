@@ -82,7 +82,7 @@ export function Composer({ onSend, onStop, busy, disabled, hint }: ComposerProps
           placeholder="Describe an invoice, e.g. Invoice Acme ₹45,000 for web design, due in 15 days"
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={handleKeyDown}
-          className="max-h-[200px] min-h-10 w-full resize-none bg-transparent py-2 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground"
+          className="max-h-[200px] min-h-10 w-full resize-none bg-transparent py-2 text-base leading-6 md:text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
         />
 
         {busy ? (

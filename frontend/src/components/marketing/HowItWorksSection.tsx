@@ -37,7 +37,7 @@ export function HowItWorksSection() {
   return (
     <section
       id="how-it-works"
-      className="border-t border-border bg-secondary/30 px-4 py-16 sm:px-6 sm:py-24 lg:px-8"
+      className="border-t border-border bg-sage/25 px-4 py-16 sm:px-6 sm:py-24 lg:px-8"
     >
       <div className="mx-auto max-w-5xl">
         <div className="text-center">

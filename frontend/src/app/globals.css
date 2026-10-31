@@ -45,6 +45,7 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-highlight: var(--highlight);
   --color-highlight-foreground: var(--highlight-foreground);
+  --color-sage: var(--sage);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -55,210 +56,160 @@
 }
 
 /* ═══════════════════════════════════════════════
-   Auditr palette
-   Primary:   Burnt orange (#CB410C): buttons, links, key surfaces
-   Accent:    Brand orange (#FF5023): logo, glows, soft tints
-   Highlight: Sunshine yellow (#FFC83D): a pinch, used sparingly
-   Surface:   Warm cream (#FAF8F5)
-   Success:   Green, Warning: Amber (kept for meaning)
+   Auditr palette — Variabl-inspired, light + dark
+   ─────────────────────────────────────────────
+   Primary:   Logo orange      (#F96332) — buttons, links, CTAs
+   Accent:    Apple red        (#FF3B30) — strong surface blocks, overdue cards
+   Highlight: Lime green       (#BDD62A) — pinch of energy, badges
+   Light bg:  Warm off-white   (#F5F5EF)
+   Dark bg:   Pure black       (#000000) with near-black surfaces
+   Top bar:   Black (#0A0A0A) with lime centre glow
+   Sidebar:   Near-black (#111110) — same in both modes
    ═══════════════════════════════════════════════ */
 
 :root {
   color-scheme: light;
 
-  /* ── Surface & Text ── */
-  --background: oklch(0.98 0.005 78.3); /* #FAF8F5 */
-  --foreground: oklch(0.21 0.014 61.8); /* #1D1712 */
+  /* ── Base surfaces — warm creamy white like the reference ── */
+  --background: oklch(0.980 0.010 68);    /* #FAF7F2 — warm cream */
+  --foreground: oklch(0.13 0.008 60);     /* #111008 — near-black warm */
+
+  /* ── Muted wash (app-shell outer bg) ── */
+  --muted: oklch(0.956 0.012 68);         /* #F0EDE7 — warm off-white */
+  --muted-foreground: oklch(0.46 0.016 60);
 
   /* ── Cards & popovers ── */
-  --card: oklch(1 0 0); /* #FFFFFF */
-  --card-foreground: oklch(0.21 0.014 61.8); /* #1D1712 */
-  --popover: oklch(1 0 0); /* #FFFFFF */
-  --popover-foreground: oklch(0.21 0.014 61.8); /* #1D1712 */
+  --card: oklch(0.995 0.004 68);          /* #FFFDF9 — warm near-white */
+  --card-foreground: oklch(0.13 0.008 60);
+  --popover: oklch(0.995 0.004 68);
+  --popover-foreground: oklch(0.13 0.008 60);
 
-  /* ── Primary: burnt orange, white text passes AA (4.9:1) ── */
-  --primary: oklch(0.569 0.183 37.5); /* #CB410C */
-  --primary-foreground: oklch(1 0 0); /* #FFFFFF */
+  /* ── Borders & inputs ── */
+  --border: oklch(0.878 0.014 68);        /* #DDD8D0 — warm grey */
+  --input: oklch(0.878 0.014 68);
 
-  /* ── Secondary: soft warm sand ── */
-  --secondary: oklch(0.94 0.017 79.4); /* #F1EADF */
-  --secondary-foreground: oklch(0.3 0.034 62.2); /* #3A2A1C */
+  /* ── Primary: orange-red matching logo + screenshot button ── */
+  --primary: oklch(0.610 0.210 32.6);     /* #E8501A — slightly deeper for the reference look */
+  --primary-foreground: oklch(1 0 0);
 
-  /* ── Muted ── */
-  --muted: oklch(0.953 0.01 81.8); /* #F3EFE8 */
-  --muted-foreground: oklch(0.502 0.019 70.3); /* #6B6258 */
+  /* ── Secondary: warm peach wash — "New invoice" button bg ── */
+  --secondary: oklch(0.956 0.030 55);     /* #F5EDE3 — warm peach */
+  --secondary-foreground: oklch(0.28 0.060 50);
 
-  /* ── Highlight: the pinch of yellow (badges, headline, active dot) ── */
-  --highlight: oklch(0.859 0.158 85.8); /* #FFC83D */
-  --highlight-foreground: oklch(0.296 0.061 86.2); /* #3A2A00 */
+  /* ── Accent: Apple red ── */
+  --accent: oklch(0.577 0.221 22.2);      /* #FF3B30 */
+  --accent-foreground: oklch(1 0 0);
 
-  /* ── Borders & focus ── */
-  --border: oklch(0.912 0.017 79.3); /* #E8E1D6 */
-  --input: oklch(0.912 0.017 79.3); /* #E8E1D6 */
-  --ring: oklch(0.653 0.175 40.2); /* #E5622F */
+  /* ── Highlight: warm amber/yellow — matches reference screenshot ── */
+  --highlight: oklch(0.840 0.155 75);     /* #F5C842 — warm amber */
+  --highlight-foreground: oklch(0.20 0.060 55); /* dark brown on amber */
 
-  /* ── Accent: bright brand orange (decoration: logo, glows, tints) ── */
-  --accent: oklch(0.65 0.22 28); /* #FF5023 */
-  --accent-foreground: oklch(0.995 0.001 90);
+  /* ── Sage: keep for dark mode glows, muted in light ── */
+  --sage: oklch(0.930 0.040 118);         /* pale sage tint */
+
+  /* ── Focus ring ── */
+  --ring: oklch(0.67 0.195 33);
 
   /* ── Destructive ── */
   --destructive: oklch(0.577 0.245 27.325);
 
   /* ── Charts ── */
-  --chart-1: oklch(0.65 0.22 28); /* coral */
-  --chart-2: oklch(0.38 0.08 165); /* deep green */
-  --chart-3: oklch(0.65 0.15 145); /* fresh green */
-  --chart-4: oklch(0.75 0.1 60); /* golden amber */
-  --chart-5: oklch(0.5 0.2 300); /* purple */
+  --chart-1: oklch(0.610 0.210 32.6);
+  --chart-2: oklch(0.577 0.221 22.2);
+  --chart-3: oklch(0.840 0.155 75);
+  --chart-4: oklch(0.75 0.1 60);
+  --chart-5: oklch(0.5 0.12 240);
 
-  /* ── Success / Warning (meaning, so they stay green and amber) ── */
+  /* ── Semantic ── */
   --success: oklch(0.62 0.19 145);
   --success-foreground: oklch(0.995 0.001 90);
   --warning: oklch(0.72 0.17 70);
   --warning-foreground: oklch(0.2 0.05 70);
 
   --radius: 0.75rem;
-  /* ── Sidebar and dark bands: warm espresso ── */
-  --sidebar: oklch(0.227 0.018 55.3); /* #231A14 */
-  --sidebar-foreground: oklch(0.92 0.021 74.7); /* #EDE3D6 */
-  --sidebar-primary: oklch(0.65 0.22 28);
-  --sidebar-primary-foreground: oklch(0.995 0.001 90);
-  --sidebar-accent: oklch(0.281 0.025 56.2); /* #33261D */
-  --sidebar-accent-foreground: oklch(0.967 0.016 79.4); /* #FAF3E8 */
-  --sidebar-border: oklch(0.31 0.027 57.1); /* #3B2D23 */
-  --sidebar-ring: oklch(0.653 0.175 40.2); /* #E5622F */
+
+  /* ── Sidebar: medium-dark grey ── */
+  --sidebar: oklch(0.30 0.008 264);        /* #3C3D40 — medium-dark grey from reference */
+  --sidebar-foreground: oklch(0.93 0.014 68);
+  --sidebar-primary: oklch(0.610 0.210 32.6);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.36 0.010 264); /* slightly lighter on hover */
+  --sidebar-accent-foreground: oklch(0.97 0.010 68);
+  --sidebar-border: oklch(0.38 0.010 264);
+  --sidebar-ring: oklch(0.67 0.195 33);
 }
 
+/* ═══════════════════════════════════════════════
+   Dark mode — black background, elevated surfaces
+   ═══════════════════════════════════════════════ */
 .dark {
   color-scheme: dark;
 
-  /* ── Surface & Text ── */
-  --background: oklch(0.187 0.01 52.8); /* #17120F */
-  --foreground: oklch(0.945 0.014 78.3); /* #F2ECE3 */
+  /* ── Base surfaces ── */
+  --background: oklch(0.10 0.004 264);    /* #0E0F11 — darker grey (chat pane) */
+  --foreground: oklch(0.94 0.008 90);     /* #EEEDE8 — warm off-white text */
 
-  /* ── Cards & popovers ── */
-  --card: oklch(0.22 0.014 51.5); /* #201915 */
-  --card-foreground: oklch(0.945 0.014 78.3); /* #F2ECE3 */
-  --popover: oklch(0.238 0.016 53.8); /* #251D18 */
-  --popover-foreground: oklch(0.945 0.014 78.3); /* #F2ECE3 */
+  /* ── Muted wash — outer shell, pure black ── */
+  --muted: oklch(0 0 0);                  /* #000000 — pure black outer shell */
+  --muted-foreground: oklch(0.58 0.008 264);
 
-  /* ── Primary: bright orange, dark text ── */
-  --primary: oklch(0.705 0.191 37.5); /* #FF6B3D */
-  --primary-foreground: oklch(0.181 0.023 53.7); /* #1A0F08 */
+  /* ── Cards & popovers — slightly lifted off black ── */
+  --card: oklch(0.12 0.006 90);           /* #181715 */
+  --card-foreground: oklch(0.94 0.008 90);
+  --popover: oklch(0.16 0.008 90);        /* #201F1C */
+  --popover-foreground: oklch(0.94 0.008 90);
 
-  /* ── Secondary: soft warm sand ── */
-  --secondary: oklch(0.27 0.02 56.7); /* #2E241D */
-  --secondary-foreground: oklch(0.908 0.021 74.6); /* #E9DFD2 */
+  /* ── Borders & inputs — very subtle dark lines, barely visible ── */
+  --border: oklch(0.08 0.004 90);         /* #0F0F0F — barely lighter than black */
+  --input: oklch(0.08 0.004 90);
 
-  /* ── Muted ── */
-  --muted: oklch(0.256 0.018 55.5); /* #2A211B */
-  --muted-foreground: oklch(0.732 0.025 69.5); /* #B3A698 */
+  /* ── Primary: slightly brighter orange for dark bg ── */
+  --primary: oklch(0.685 0.210 32.6);     /* #FF6E3A — pops on black */
+  --primary-foreground: oklch(0.10 0.010 30); /* very dark on bright orange */
 
-  /* ── Highlight: the pinch of yellow (badges, headline, active dot) ── */
-  --highlight: oklch(0.88 0.154 89.8); /* #FFD24D */
-  --highlight-foreground: oklch(0.243 0.05 87.2); /* #2A1E00 */
+  /* ── Secondary: dark lime-tinted surface ── */
+  --secondary: oklch(0.18 0.030 115);     /* #1E2410 — dark lime surface */
+  --secondary-foreground: oklch(0.86 0.080 115); /* #C8E060 — light lime text */
 
-  /* ── Borders & focus ── */
-  --border: oklch(0.312 0.023 58.6); /* #3A2E25 */
-  --input: oklch(0.341 0.026 57.2); /* #43352B */
-  --ring: oklch(0.753 0.155 41.6); /* #FF8A5C */
+  /* ── Accent: Apple red — same, stays vivid on dark ── */
+  --accent: oklch(0.600 0.228 22.2);      /* #FF3B30 */
+  --accent-foreground: oklch(1 0 0);
 
-  /* ── Accent: brand orange, slightly lighter ── */
-  --accent: oklch(0.68 0.2 28);
-  --accent-foreground: oklch(0.995 0.001 90);
+  /* ── Highlight: lime — slightly brighter on dark ── */
+  --highlight: oklch(0.830 0.171 118.5);  /* #C8E030 */
+  --highlight-foreground: oklch(0.14 0.055 120); /* #0F1A00 */
+
+  /* ── Sage: deep lime-green glow for dark hero ── */
+  --sage: oklch(0.34 0.058 140);          /* #2A4020 — dark sage for glows */
+
+  /* ── Focus ring ── */
+  --ring: oklch(0.72 0.200 33);
 
   /* ── Destructive ── */
-  --destructive: oklch(0.704 0.191 22.216);
+  --destructive: oklch(0.630 0.240 22.2);
 
   /* ── Charts ── */
-  --chart-1: oklch(0.7 0.2 28);
-  --chart-2: oklch(0.65 0.15 155);
-  --chart-3: oklch(0.7 0.15 145);
+  --chart-1: oklch(0.685 0.210 32.6);
+  --chart-2: oklch(0.600 0.228 22.2);
+  --chart-3: oklch(0.830 0.171 118.5);
   --chart-4: oklch(0.78 0.12 70);
-  --chart-5: oklch(0.6 0.18 300);
+  --chart-5: oklch(0.62 0.15 240);
 
-  /* ── Success / Warning ── */
+  /* ── Semantic ── */
   --success: oklch(0.65 0.19 145);
-  --success-foreground: oklch(0.12 0.03 165);
+  --success-foreground: oklch(0.10 0.04 165);
   --warning: oklch(0.78 0.15 70);
-  --warning-foreground: oklch(0.15 0.05 70);
+  --warning-foreground: oklch(0.12 0.05 70);
 
-  /* ── Sidebar and dark bands: warm espresso ── */
-  --sidebar: oklch(0.164 0.011 52.7); /* #120D0A */
-  --sidebar-foreground: oklch(0.887 0.022 74.1); /* #E3D8CA */
-  --sidebar-primary: oklch(0.68 0.2 28);
-  --sidebar-primary-foreground: oklch(0.995 0.001 90);
-  --sidebar-accent: oklch(0.222 0.018 55.3); /* #221913 */
-  --sidebar-accent-foreground: oklch(0.943 0.021 81.8); /* #F3EBDD */
-  --sidebar-border: oklch(0.269 0.021 60.4); /* #2E241C */
-  --sidebar-ring: oklch(0.647 0.152 40.5); /* #D9693F */
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    color-scheme: dark;
-
-    /* ── Surface & Text ── */
-    --background: oklch(0.187 0.01 52.8); /* #17120F */
-    --foreground: oklch(0.945 0.014 78.3); /* #F2ECE3 */
-
-    /* ── Cards & popovers ── */
-    --card: oklch(0.22 0.014 51.5); /* #201915 */
-    --card-foreground: oklch(0.945 0.014 78.3); /* #F2ECE3 */
-    --popover: oklch(0.238 0.016 53.8); /* #251D18 */
-    --popover-foreground: oklch(0.945 0.014 78.3); /* #F2ECE3 */
-
-    /* ── Primary: bright orange, dark text ── */
-    --primary: oklch(0.705 0.191 37.5); /* #FF6B3D */
-    --primary-foreground: oklch(0.181 0.023 53.7); /* #1A0F08 */
-
-    /* ── Secondary: soft warm sand ── */
-    --secondary: oklch(0.27 0.02 56.7); /* #2E241D */
-    --secondary-foreground: oklch(0.908 0.021 74.6); /* #E9DFD2 */
-
-    /* ── Muted ── */
-    --muted: oklch(0.256 0.018 55.5); /* #2A211B */
-    --muted-foreground: oklch(0.732 0.025 69.5); /* #B3A698 */
-
-    /* ── Highlight: the pinch of yellow (badges, headline, active dot) ── */
-    --highlight: oklch(0.88 0.154 89.8); /* #FFD24D */
-    --highlight-foreground: oklch(0.243 0.05 87.2); /* #2A1E00 */
-
-    /* ── Borders & focus ── */
-    --border: oklch(0.312 0.023 58.6); /* #3A2E25 */
-    --input: oklch(0.341 0.026 57.2); /* #43352B */
-    --ring: oklch(0.753 0.155 41.6); /* #FF8A5C */
-
-    /* ── Accent: brand orange, slightly lighter ── */
-    --accent: oklch(0.68 0.2 28);
-    --accent-foreground: oklch(0.995 0.001 90);
-
-    /* ── Destructive ── */
-    --destructive: oklch(0.704 0.191 22.216);
-
-    /* ── Charts ── */
-    --chart-1: oklch(0.7 0.2 28);
-    --chart-2: oklch(0.65 0.15 155);
-    --chart-3: oklch(0.7 0.15 145);
-    --chart-4: oklch(0.78 0.12 70);
-    --chart-5: oklch(0.6 0.18 300);
-
-    /* ── Success / Warning ── */
-    --success: oklch(0.65 0.19 145);
-    --success-foreground: oklch(0.12 0.03 165);
-    --warning: oklch(0.78 0.15 70);
-    --warning-foreground: oklch(0.15 0.05 70);
-
-    /* ── Sidebar and dark bands: warm espresso ── */
-    --sidebar: oklch(0.164 0.011 52.7); /* #120D0A */
-    --sidebar-foreground: oklch(0.887 0.022 74.1); /* #E3D8CA */
-    --sidebar-primary: oklch(0.68 0.2 28);
-    --sidebar-primary-foreground: oklch(0.995 0.001 90);
-    --sidebar-accent: oklch(0.222 0.018 55.3); /* #221913 */
-    --sidebar-accent-foreground: oklch(0.943 0.021 81.8); /* #F3EBDD */
-    --sidebar-border: oklch(0.269 0.021 60.4); /* #2E241C */
-    --sidebar-ring: oklch(0.647 0.152 40.5); /* #D9693F */
-  }
+  /* ── Sidebar: medium-dark grey matching light mode ── */
+  --sidebar: oklch(0.30 0.008 264);        /* #3C3D40 — medium-dark grey from reference */
+  --sidebar-foreground: oklch(0.93 0.003 264); /* #E8EAED — Gmail white text */
+  --sidebar-primary: oklch(0.685 0.210 32.6);
+  --sidebar-primary-foreground: oklch(0.10 0.010 30);
+  --sidebar-accent: oklch(0.36 0.010 264); /* slightly lighter on hover */
+  --sidebar-accent-foreground: oklch(0.96 0.003 264); /* brighter on hover */
+  --sidebar-border: oklch(0.38 0.010 264);
+  --sidebar-ring: oklch(0.72 0.200 33);
 }
 
 

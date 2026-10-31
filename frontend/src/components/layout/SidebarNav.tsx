@@ -35,7 +35,8 @@ export function SidebarNav({ wide, onNavigate }: SidebarNavProps) {
           'mt-1 mb-4 ml-2 flex h-14 items-center overflow-hidden rounded-2xl bg-secondary whitespace-nowrap text-secondary-foreground shadow-sm transition-[width,box-shadow] duration-200 hover:shadow-md',
           MOTION,
           FOCUS,
-          wide ? 'w-40' : 'w-14',
+          // Show full button when wide prop is true OR parent group is hovered
+          wide ? 'w-40' : 'w-14 group-hover:w-40',
         )}
       >
         <span className="flex size-14 shrink-0 items-center justify-center">
@@ -44,7 +45,8 @@ export function SidebarNav({ wide, onNavigate }: SidebarNavProps) {
         <span
           className={cn(
             'pr-5 text-sm font-medium transition-opacity duration-150',
-            wide ? 'opacity-100 delay-75' : 'opacity-0',
+            // Show label when wide OR when parent aside is hovered
+            wide ? 'opacity-100 delay-75' : 'opacity-0 group-hover:opacity-100 group-hover:delay-75',
           )}
         >
           New invoice
@@ -64,11 +66,12 @@ export function SidebarNav({ wide, onNavigate }: SidebarNavProps) {
                   'flex h-9 items-center overflow-hidden text-sm whitespace-nowrap transition-[margin,width,padding,border-radius,background-color] duration-200',
                   MOTION,
                   FOCUS,
+                  // Width and margin respond to wide prop OR parent group hover
                   wide
                     ? 'ml-0 w-[calc(100%-0.5rem)] rounded-r-full pl-[26px]'
-                    : 'ml-[18px] w-9 rounded-full pl-2',
+                    : 'ml-[18px] w-9 rounded-full pl-2 group-hover:ml-0 group-hover:w-[calc(100%-0.5rem)] group-hover:rounded-r-full group-hover:pl-[26px]',
                   active
-                    ? 'bg-secondary font-bold text-secondary-foreground'
+                    ? 'bg-primary/10 font-bold text-primary dark:bg-primary/15'
                     : 'text-foreground hover:bg-foreground/[0.07]',
                 )}
               >
@@ -76,7 +79,8 @@ export function SidebarNav({ wide, onNavigate }: SidebarNavProps) {
                 <span
                   className={cn(
                     'ml-[18px] transition-opacity duration-150',
-                    wide ? 'opacity-100 delay-75' : 'opacity-0',
+                    // Show label when wide OR when parent aside is hovered
+                    wide ? 'opacity-100 delay-75' : 'opacity-0 group-hover:opacity-100 group-hover:delay-75',
                   )}
                 >
                   {item.title}
@@ -86,7 +90,8 @@ export function SidebarNav({ wide, onNavigate }: SidebarNavProps) {
                     aria-hidden="true"
                     className={cn(
                       'mr-4 ml-auto size-2 shrink-0 rounded-full bg-highlight transition-opacity duration-150',
-                      wide ? 'opacity-100' : 'opacity-0',
+                      // Show dot when wide OR when parent aside is hovered
+                      wide ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
                     )}
                   />
                 ) : null}

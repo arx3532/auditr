@@ -10,12 +10,15 @@ const sentences = siteConfig.tagline.split(/(?<=\.)\s+/)
 
 export function HeroSection() {
   return (
-    <section className="relative isolate overflow-hidden px-4 pt-12 pb-16 sm:px-6 sm:pt-20 sm:pb-24 lg:px-8">
-      {/* Soft colour wash: sage glow in the middle, coral and gold at the edges */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-24 left-1/2 h-[28rem] w-[46rem] max-w-full -translate-x-1/2 rounded-full bg-secondary/80 blur-3xl" />
-        <div className="absolute top-8 right-[6%] h-64 w-64 rounded-full bg-accent/15 blur-3xl" />
-        <div className="absolute top-44 left-[4%] h-56 w-56 rounded-full bg-highlight/25 blur-3xl" />
+    <section className="relative isolate px-4 pt-12 pb-16 sm:px-6 sm:pt-20 sm:pb-24 lg:px-8">
+      {/* Hero gradient — warm peach from bottom-left like the reference screenshot */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        {/* Main peach/salmon glow — bottom-left origin, fades toward centre-right */}
+        <div className="absolute -bottom-20 -left-20 h-[36rem] w-[36rem] rounded-full bg-[oklch(0.88_0.07_45)] opacity-55 blur-3xl dark:bg-sage dark:opacity-20" />
+        {/* Lighter secondary bloom extending upward */}
+        <div className="absolute top-0 left-[15%] h-[24rem] w-[28rem] rounded-full bg-[oklch(0.92_0.05_50)] opacity-45 blur-3xl dark:bg-sage dark:opacity-15" />
+        {/* Faint accent dot top-right */}
+        <div className="absolute top-1/4 right-[8%] h-48 w-48 rounded-full bg-primary opacity-[0.08] blur-3xl dark:opacity-[0.05]" />
       </div>
 
       <div className="mx-auto max-w-5xl text-center">
@@ -29,12 +32,14 @@ export function HeroSection() {
           <span>Deterministic tax calculation • Human-in-the-loop approval</span>
         </div>
 
-        {/* Semantic single <h1>: the middle sentence is highlighted in yellow, the last in orange */}
-        <h1 className="text-3xl font-extrabold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
+        {/* Semantic single <h1>: "Say it." is white in light / foreground in dark, middle highlighted, last in orange */}
+        <h1 className="text-3xl font-extrabold tracking-tight text-balance sm:text-5xl lg:text-6xl">
           {sentences.length === 3 ? (
             <>
-              {sentences[0]}{' '}
-              <span className="rounded-md bg-highlight px-2 text-highlight-foreground box-decoration-clone">
+              {/* "Say it." — black in light mode, warm off-white in dark */}
+              <span className="text-foreground dark:text-foreground">{sentences[0]}</span>{' '}
+              {/* "Review it." — white text on lime background in light, dark foreground in dark */}
+              <span className="rounded-md bg-highlight px-2 text-white dark:text-highlight-foreground box-decoration-clone">
                 {sentences[1]}
               </span>{' '}
               <span className="text-primary">{sentences[2]}</span>

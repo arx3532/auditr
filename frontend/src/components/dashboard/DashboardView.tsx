@@ -74,8 +74,8 @@ export function DashboardView() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/60 p-4 sm:p-5 shadow-xs backdrop-blur-xs">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <span className="flex size-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+            <span className="flex size-2 rounded-full bg-success animate-pulse" />
+            <span className="text-xs font-semibold text-success uppercase tracking-wider">
               Financial Copilot Active
             </span>
           </div>
