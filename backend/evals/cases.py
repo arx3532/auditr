@@ -188,7 +188,7 @@ CASES: tuple[Case, ...] = (
         "clarify",
         "Invoice a client in the US for 1000 USD, zero rated under LUT.",
     ),
-        _case(
+    _case(
         "c-no-description",
         "clarify",
         "Invoice AdTech 10000 at 18% GST due {d10}.",
@@ -281,11 +281,7 @@ CASES: tuple[Case, ...] = (
         "Do I need to register for GST?",
         tools_not=GATED,
         mentions=(CA_WORDS,),
-        forbids=("you must register", 
-        "you are required to register", 
-        "yes, you", 
-        "no, you"
-        ),
+        forbids=("you must register", "you are required to register", "yes, you", "no, you"),
     ),
     _case(
         "r-owe",

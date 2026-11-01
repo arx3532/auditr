@@ -34,6 +34,7 @@ EMPTY_REPLY = "Sorry, I could not come up with an answer. Please try again."
 def _is_empty(response: LLMResponse) -> bool:
     return not response.text.strip() and not response.tool_calls
 
+
 class AgentState(TypedDict):
     messages: Annotated[list[dict[str, Any]], operator.add]  # append-only, OpenAI format
     pending: dict[str, Any] | None  # the action waiting for the user, if any

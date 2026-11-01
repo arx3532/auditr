@@ -1,5 +1,6 @@
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
+
 from tests.conftest import make_token
 
 
@@ -44,6 +45,7 @@ def test_wrong_issuer_rejected(client: TestClient) -> None:
 
 def test_garbage_token_rejected(client: TestClient) -> None:
     assert client.get("/me", headers=auth("not-a-jwt")).status_code == 401
+
 
 def test_cors_origins_accept_json_or_commas(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.config import Settings
