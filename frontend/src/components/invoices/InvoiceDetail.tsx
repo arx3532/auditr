@@ -1,5 +1,11 @@
+'use client'
+
+import { CreditCardIcon, PencilIcon } from 'lucide-react'
+import { useState } from 'react'
+
 import { DateText } from '@/components/common/DateText'
 import { MoneyText } from '@/components/common/MoneyText'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -10,11 +16,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { InvoiceDetail as InvoiceDetailData, TaxBreakdown } from '@/lib/api/types'
+import type { Invoice, Payment, TaxBreakdown } from '@/lib/api/types'
 import { formatRate } from '@/lib/format/money'
 
 import { CopyLinkButton } from './CopyLinkButton'
+import { EditInvoiceSheet } from './EditInvoiceSheet'
 import { InvoiceStatusBadge } from './InvoiceStatusBadge'
+import { RecordPaymentDialog } from './RecordPaymentDialog'
 
 export function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -48,22 +56,69 @@ export function TaxRows({ tax }: { tax: TaxBreakdown }) {
   )
 }
 
-/** Presentational only: every figure is shown exactly as the server returned it. */
-export function InvoiceDetail({ invoice }: { invoice: InvoiceDetailData }) {
+interface InvoiceDetailProps {
+  invoice: Invoice
+  payments: Payment[]
+  onEditDraft?: () => void
+}
+
+/** Presentational and interactive detail view with strict API integration. */
+export function InvoiceDetail({ invoice, payments, onEditDraft }: InvoiceDetailProps) {
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false)
+  const [editSheetOpen, setEditSheetOpen] = useState(false)
+
+  const canRecordPayment =
+    ['issued', 'partially_paid', 'overdue'].includes(invoice.status) &&
+    Number(invoice.amountDue) > 0
+
+  const isShareable = invoice.status !== 'draft' && invoice.status !== 'cancelled'
+  const isDraft = invoice.status === 'draft'
+
+  function triggerEdit() {
+    if (onEditDraft) onEditDraft()
+    else setEditSheetOpen(true)
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {invoice.number ? `Invoice ${invoice.number}` : 'Draft invoice'}
-          </h1>
-          <InvoiceStatusBadge status={invoice.status} />
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {invoice.number ? `Invoice ${invoice.number}` : 'Draft invoice'}
+            </h1>
+            <InvoiceStatusBadge status={invoice.status} />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {invoice.customer.name}
+            {invoice.customer.gstin ? ` · GSTIN ${invoice.customer.gstin}` : ''}
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {invoice.customer.name}
-          {invoice.customer.gstin ? ` · GSTIN ${invoice.customer.gstin}` : ''}
-        </p>
-        {invoice.publicToken ? <CopyLinkButton token={invoice.publicToken} /> : null}
+
+        {/* Action toolbar */}
+        <div className="flex flex-wrap items-center gap-2">
+          {isDraft ? (
+            <Button variant="outline" size="sm" onClick={triggerEdit} className="rounded-xl font-medium">
+              <PencilIcon className="mr-1.5 size-4" />
+              Edit draft
+            </Button>
+          ) : null}
+
+          {canRecordPayment ? (
+            <Button
+              size="sm"
+              onClick={() => setRecordPaymentOpen(true)}
+              className="rounded-xl bg-primary font-semibold text-primary-foreground shadow-xs"
+            >
+              <CreditCardIcon className="mr-1.5 size-4" />
+              Record payment
+            </Button>
+          ) : null}
+
+          {isShareable ? (
+            <CopyLinkButton invoiceId={invoice.id} token={invoice.publicToken} />
+          ) : null}
+        </div>
       </header>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -137,14 +192,27 @@ export function InvoiceDetail({ invoice }: { invoice: InvoiceDetailData }) {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Payments</CardTitle>
-          <CardDescription>
-            TDS is tax withheld by the customer. It is shown separately from the cash you received.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle>Payments</CardTitle>
+            <CardDescription>
+              TDS is tax withheld by the customer. It is shown separately from the cash you received.
+            </CardDescription>
+          </div>
+          {canRecordPayment ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRecordPaymentOpen(true)}
+              className="rounded-xl font-medium"
+            >
+              <CreditCardIcon className="mr-1.5 size-4" />
+              Record payment
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent>
-          {invoice.payments.length === 0 ? (
+          {payments.length === 0 ? (
             <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
           ) : (
             <Table>
@@ -157,7 +225,7 @@ export function InvoiceDetail({ invoice }: { invoice: InvoiceDetailData }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoice.payments.map((payment) => (
+                {payments.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell>
                       <DateText value={payment.date} />
@@ -175,6 +243,20 @@ export function InvoiceDetail({ invoice }: { invoice: InvoiceDetailData }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog for recording payment */}
+      <RecordPaymentDialog
+        open={recordPaymentOpen}
+        onOpenChange={setRecordPaymentOpen}
+        invoice={invoice}
+      />
+
+      {/* Sheet for manual editing of draft invoices */}
+      <EditInvoiceSheet
+        open={editSheetOpen}
+        onOpenChange={setEditSheetOpen}
+        invoice={invoice}
+      />
     </div>
   )
 }

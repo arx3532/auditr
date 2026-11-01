@@ -196,7 +196,8 @@ TOOLS: tuple[Tool, ...] = (
     Tool(
         "record_payment",
         "Propose recording a payment received against an issued invoice. The user must "
-        "approve before anything is recorded. tds_deducted is TDS the customer withheld "
+        "approve before anything is recorded. Leave paid_on out for today."
+        "tds_deducted is TDS the customer withheld "
         "(default 0).",
         RecordPaymentArgs,
         gated=True,

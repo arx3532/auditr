@@ -52,6 +52,7 @@ export interface ChatState {
 
 export type ChatAction =
   | { type: 'restore'; threadId: string }
+  | { type: 'rehydrate'; threadId: string; pendingApproval: import('@/lib/api/types').PendingApprovalPayload }
   | { type: 'send_started'; text: string }
   | { type: 'send_restarted' }
   | { type: 'decision_started'; decision: ResumeDecision; edits?: DraftEdits }
@@ -221,6 +222,26 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'restore':
       return state.threadId ? state : { ...state, threadId: action.threadId }
+
+    case 'rehydrate': {
+      // Only apply if we have no messages yet — SSE has not started since the restore.
+      // If a draft is present, inject it as a pending approval card so the user can act.
+      if (state.messages.length > 0) return state
+      const { pendingApproval, threadId } = action
+      const stateWithThread = state.threadId ? state : { ...state, threadId }
+      if (!pendingApproval.draft) return stateWithThread
+      return appendMessage(
+        { ...stateWithThread, status: 'awaiting_approval' },
+        (id) => ({
+          id,
+          role: 'approval',
+          approvalId: pendingApproval.approvalId,
+          expiresAt: pendingApproval.expiresAt,
+          draft: pendingApproval.draft!,
+          decision: { kind: 'pending' },
+        }),
+      )
+    }
 
     case 'send_started':
       return appendMessage(

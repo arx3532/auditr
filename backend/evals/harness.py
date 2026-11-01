@@ -5,7 +5,7 @@ import uuid
 from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
 from typing import Any
-
+from langgraph.errors import GraphRecursionError
 from sqlalchemy import func, select
 
 from app.agent.graph import build_graph
@@ -97,6 +97,7 @@ class CaseResult:
     tokens: int
     tools: tuple[str, ...]
     reply: str
+    transcript: tuple[str, ...] = ()
 
 
 def _custom_payload(chunk: Any) -> dict[str, Any] | None:
@@ -172,6 +173,35 @@ def _leaked(requests: list[list[Message]]) -> tuple[str, ...]:
     return ()
 
 
+async def _saved_messages(ctx: Context, thread_id: uuid.UUID) -> list[dict[str, Any]]:
+    try:
+        key = {"configurable": {"thread_id": str(thread_id)}}
+        saved = await ctx.checkpointer.aget_tuple(key)
+    except Exception:
+        return []
+    if saved is None:
+        return []
+    return list(saved.checkpoint.get("channel_values", {}).get("messages", []))
+
+
+def transcript_lines(messages: list[dict[str, Any]], limit: int = 14) -> tuple[str, ...]:
+    """The last steps of the conversation, in plain words."""
+    lines: list[str] = []
+    for m in messages:
+        role = m.get("role")
+        if role == "assistant" and m.get("tool_calls"):
+            for call in m["tool_calls"]:
+                fn = call.get("function", {})
+                lines.append(f"model calls {fn.get('name')}({str(fn.get('arguments'))[:160]})")
+        elif role == "assistant":
+            lines.append("model says: " + str(m.get("content", ""))[:160])
+        elif role == "tool":
+            lines.append("tool result: " + str(m.get("content", ""))[:200])
+        elif role == "user":
+            lines.append("user: " + str(m.get("content", ""))[:100])
+    return tuple(line.replace("\n", " ") for line in lines[-limit:])
+
+
 async def run_once(case: Case, ctx: Context) -> CaseResult:
     """Run one case in a freshly seeded world. The harness never approves anything: it
     stops where the agent pauses for the user."""
@@ -203,11 +233,14 @@ async def run_once(case: Case, ctx: Context) -> CaseResult:
                 parts.append(str(payload.get("text", "")))
     except LLMUnavailable as exc:
         unreachable = f"model unavailable: {exc}"
+    except GraphRecursionError:
+        crash = "the model kept calling tools without finishing (hit the step limit)"
     except Exception as exc:  # a crash is a finding, not a reason to stop the run
         crash = f"agent crashed: {type(exc).__name__}"
     latency = time.monotonic() - started
 
     after = await asyncio.to_thread(snapshot, seed.user_id)
+    transcript = transcript_lines(await _saved_messages(ctx, thread_id))
     pending = await asyncio.to_thread(pending_info, seed.user_id, thread_id)
     reply = "".join(parts)
     trace = Trace(tuple(tools), reply, pending, before, after, _leaked(llm.requests))
@@ -225,6 +258,7 @@ async def run_once(case: Case, ctx: Context) -> CaseResult:
         tokens=llm.tokens,
         tools=tuple(tools),
         reply=reply,
+        transcript=transcript,
     )
 
 

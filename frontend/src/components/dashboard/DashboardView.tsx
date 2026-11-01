@@ -24,6 +24,7 @@ function SummarySection() {
         title="Could not load the summary"
         error={query.error}
         onRetry={() => void query.refetch()}
+        noDataFallback
       />
     )
   }
@@ -36,7 +37,12 @@ function RecentInvoicesSection() {
   if (query.isPending) return <TableSkeleton rows={3} />
   if (query.isError && !query.data) {
     return (
-      <ErrorState title="Could not load invoices" error={query.error} onRetry={() => void query.refetch()} />
+      <ErrorState
+        title="Could not load invoices"
+        error={query.error}
+        onRetry={() => void query.refetch()}
+        noDataFallback
+      />
     )
   }
 
@@ -61,7 +67,7 @@ function RecentInvoicesSection() {
     )
   }
   return (
-    <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs">
+    <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs dark:border-white/[0.15]">
       <InvoiceTable invoices={recent} caption="Recent invoices" />
     </div>
   )
@@ -71,7 +77,7 @@ export function DashboardView() {
   return (
     <div className="flex flex-col gap-6">
       {/* Quick Action Bar with Palette Colors */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/60 p-4 sm:p-5 shadow-xs backdrop-blur-xs">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/60 p-4 sm:p-5 shadow-xs backdrop-blur-xs dark:border-white/[0.15]">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <span className="flex size-2 rounded-full bg-success animate-pulse" />

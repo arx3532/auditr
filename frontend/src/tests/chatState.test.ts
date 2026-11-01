@@ -110,7 +110,11 @@ describe('chatReducer', () => {
   it('replaces the card being edited with the recalculated draft', () => {
     const state = run(
       [
-        { type: 'decision_started', decision: 'edit', edits: { amount: '60000.00' } },
+        {
+          type: 'decision_started',
+          decision: 'edit',
+          edits: { items: [{ description: 'Design', taxableValue: '60000.00', gstRate: '18' }] },
+        },
         { type: 'stream_opened' },
         event({ type: 'text_delta', text: 'Updated.' }),
         event(approval('apr_2')),

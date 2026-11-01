@@ -13,7 +13,12 @@ export function CustomersView() {
   if (query.isPending) return <TableSkeleton />
   if (query.isError) {
     return (
-      <ErrorState title="Could not load customers" error={query.error} onRetry={() => void query.refetch()} />
+      <ErrorState
+        title="Could not load customers"
+        error={query.error}
+        onRetry={() => void query.refetch()}
+        noDataFallback
+      />
     )
   }
   if (query.data.length === 0) {
@@ -24,5 +29,9 @@ export function CustomersView() {
       />
     )
   }
-  return <CustomerTable customers={query.data} />
+  return (
+    <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs dark:border-white/[0.15]">
+      <CustomerTable customers={query.data} />
+    </div>
+  )
 }

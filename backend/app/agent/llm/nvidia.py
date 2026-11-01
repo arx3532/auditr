@@ -27,7 +27,7 @@ from app.agent.privacy import ensure_no_sensitive
 logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
-DEFAULT_MODEL = "meta/llama-3.2-11b-vision-instruct"
+DEFAULT_MODEL = "meta/muse-glimmer-30b"
 CHAT_PATH = "/chat/completions"
 RETRYABLE = {429, 500, 502, 503, 504}
 

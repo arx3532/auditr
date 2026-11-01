@@ -405,3 +405,15 @@ def test_pending_approval_survives_a_server_restart(client: TestClient) -> None:
         events = parse_events(r)
     assert of_type(events, "approval_resolved")[0]["outcome"] == "approved"
     assert text_of(events) == "Issued after restart."
+
+def test_an_empty_model_reply_is_retried_then_replaced(client: TestClient) -> None:
+    h = setup_user(client, "a")
+    llm = use_llm(text_response(""), text_response("Recovered."))
+    events = parse_events(say(client, h, "hi"))
+    assert text_of(events) == "Recovered."
+    assert len(llm.requests) == 2
+
+    use_llm(text_response(""), text_response(""))
+    events = parse_events(say(client, h, "hi again"))
+    assert "could not come up with an answer" in text_of(events)
+    assert events[-1]["type"] == "done"

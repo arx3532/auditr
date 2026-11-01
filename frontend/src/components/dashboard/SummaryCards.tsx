@@ -9,7 +9,7 @@ export function SummaryCards({ summary }: { summary: ReportSummary }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {/* 1. Revenue this Month (Primary Forest Green Theme) */}
-      <Card className="relative overflow-hidden rounded-2xl border-0 bg-gradient-to-br from-primary via-primary/95 to-primary/90 text-primary-foreground shadow-md">
+      <Card className="relative overflow-hidden rounded-2xl border-0 bg-gradient-to-br from-primary via-primary/95 to-primary/90 text-primary-foreground shadow-md dark:border dark:border-white/[0.15]">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 size-24 rounded-full bg-white/10 blur-xl pointer-events-none" />
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardDescription className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/80">
@@ -30,7 +30,7 @@ export function SummaryCards({ summary }: { summary: ReportSummary }) {
       </Card>
 
       {/* 2. Overdue Invoices Count (Coral / Accent Theme) */}
-      <Card className="relative overflow-hidden rounded-2xl border-0 bg-gradient-to-br from-accent via-accent/95 to-accent/90 text-accent-foreground shadow-md">
+      <Card className="relative overflow-hidden rounded-2xl border-0 bg-gradient-to-br from-accent via-accent/95 to-accent/90 text-accent-foreground shadow-md dark:border dark:border-white/[0.15]">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 size-24 rounded-full bg-white/10 blur-xl pointer-events-none" />
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardDescription className="text-xs font-semibold uppercase tracking-wider text-accent-foreground/80">
@@ -57,7 +57,7 @@ export function SummaryCards({ summary }: { summary: ReportSummary }) {
       </Card>
 
       {/* 3. Overdue Amount (Warm Amber / Golden Warning Theme) */}
-      <Card className="relative overflow-hidden rounded-2xl border border-warning/30 bg-card text-foreground shadow-sm">
+      <Card className="relative overflow-hidden rounded-2xl border border-warning/30 bg-card text-foreground shadow-sm dark:border-white/[0.15]">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardDescription className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
             Overdue total
@@ -75,7 +75,7 @@ export function SummaryCards({ summary }: { summary: ReportSummary }) {
       </Card>
 
       {/* 4. Guardrails & Safety (Fresh Green / Success Theme) */}
-      <Card className="relative overflow-hidden rounded-2xl border border-success/30 bg-card text-foreground shadow-sm">
+      <Card className="relative overflow-hidden rounded-2xl border border-success/30 bg-card text-foreground shadow-sm dark:border-white/[0.15]">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardDescription className="text-xs font-semibold uppercase tracking-wider text-success">
             Ledger safety
@@ -85,7 +85,9 @@ export function SummaryCards({ summary }: { summary: ReportSummary }) {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">100%</div>
+          <div className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+            Human-gated
+          </div>
           <p className="mt-1 text-[11px] text-muted-foreground font-medium">
             Human approval gate active on writes
           </p>

@@ -46,7 +46,7 @@ export interface ApiClientOptions {
 }
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   query?: Record<string, string | undefined>
   body?: unknown
   headers?: Record<string, string>
@@ -60,6 +60,8 @@ export interface ApiClient {
   request<T>(path: string, options?: RequestOptions): Promise<T>
   /** Streaming request. Resolves with the raw response once headers confirm an SSE body. */
   stream(path: string, options?: RequestOptions): Promise<Response>
+  /** Binary/Blob request (e.g. CSV file download). Returns the Blob and parsed filename. */
+  blob(path: string, options?: RequestOptions): Promise<{ blob: Blob; filename?: string }>
 }
 
 const NETWORK_MESSAGE = 'Could not reach the server. Check your connection and try again.'
@@ -194,6 +196,15 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         })
       }
       return response
+    },
+
+    async blob(path: string, requestOptions: RequestOptions = {}): Promise<{ blob: Blob; filename?: string }> {
+      const response = await send(path, requestOptions, 'text/csv, application/octet-stream, */*')
+      const blob = await response.blob()
+      const disposition = response.headers.get('Content-Disposition') ?? ''
+      const match = /filename="?([^"]+)"?/.exec(disposition)
+      const filename = match?.[1]
+      return { blob, filename }
     },
   }
 }

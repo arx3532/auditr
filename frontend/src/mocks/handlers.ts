@@ -88,7 +88,17 @@ export function createHandlers(baseUrl: string) {
 
       const record = getMockState().records.find(({ invoice }) => invoice.id === params.id)
       if (!record) return errorResponse(404, 'invoice_not_found', 'That invoice does not exist.')
-      return HttpResponse.json({ ...record.invoice, payments: record.payments })
+      return HttpResponse.json(record.invoice)
+    }),
+
+    http.get(`${baseUrl}/invoices/:id/payments`, async ({ request, params }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const record = getMockState().records.find(({ invoice }) => invoice.id === params.id)
+      if (!record) return errorResponse(404, 'invoice_not_found', 'That invoice does not exist.')
+      return HttpResponse.json(record.payments)
     }),
 
     http.get(`${baseUrl}/customers`, async ({ request }) => {
@@ -196,6 +206,124 @@ export function createHandlers(baseUrl: string) {
       return HttpResponse.json(record.invoice)
     }),
 
+    http.patch(`${baseUrl}/invoices/:id`, async ({ request, params }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const state = getMockState()
+      const record = state.records.find(({ invoice }) => invoice.id === params.id)
+      if (!record) return errorResponse(404, 'invoice_not_found', 'That invoice does not exist.')
+      if (record.invoice.status !== 'draft') {
+        return errorResponse(409, 'invalid_state', 'Only draft invoices can be edited.')
+      }
+
+      const body = await readJson<any>(request)
+      const customer = body?.customerId
+        ? state.customers.find((c) => c.id === body.customerId) ?? record.invoice.customer
+        : record.invoice.customer
+
+      const updated = buildInvoice({
+        id: record.invoice.id,
+        customer,
+        status: 'draft',
+        items: body?.items ?? record.invoice.items,
+        dueDate: body?.dueDate ?? record.invoice.dueDate,
+      })
+      if (body?.lutRef !== undefined) updated.tax.lutRef = body.lutRef
+      record.invoice = updated
+      return HttpResponse.json(record.invoice)
+    }),
+
+    http.post(`${baseUrl}/invoices/:id/cancel`, async ({ request, params }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const state = getMockState()
+      const record = state.records.find(({ invoice }) => invoice.id === params.id)
+      if (!record) return errorResponse(404, 'invoice_not_found', 'That invoice does not exist.')
+      if (record.invoice.status !== 'draft') {
+        return errorResponse(409, 'invalid_state', 'Only draft invoices can be cancelled.')
+      }
+
+      record.invoice.status = 'cancelled'
+      return HttpResponse.json(record.invoice)
+    }),
+
+    http.post(`${baseUrl}/invoices/:id/payments`, async ({ request, params }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const key = request.headers.get('Idempotency-Key')
+      if (!key) {
+        return errorResponse(400, 'idempotency_key_required', 'An Idempotency-Key header is required.')
+      }
+
+      const state = getMockState()
+      const record = state.records.find(({ invoice }) => invoice.id === params.id)
+      if (!record) return errorResponse(404, 'invoice_not_found', 'That invoice does not exist.')
+
+      const body = await readJson<any>(request)
+      const cashReceived = body?.cashReceived ?? '0.00'
+      const tdsDeducted = body?.tdsDeducted ?? '0.00'
+      const date = body?.date ?? new Date().toISOString().slice(0, 10)
+
+      const currentDue = Number(record.invoice.amountDue)
+      const totalPaid = Number(cashReceived) + Number(tdsDeducted)
+      const newDueNum = Math.max(0, currentDue - totalPaid)
+      const newDue = newDueNum.toFixed(2)
+
+      record.invoice.amountDue = newDue
+      record.invoice.status = newDueNum === 0 ? 'paid' : 'partially_paid'
+
+      const payment = {
+        id: `pay_${crypto.randomUUID().slice(0, 8)}`,
+        invoiceId: record.invoice.id,
+        cashReceived,
+        tdsDeducted,
+        date,
+      }
+      record.payments.push(payment)
+
+      return HttpResponse.json({ payment, invoice: record.invoice }, { status: 201 })
+    }),
+
+    http.post(`${baseUrl}/invoices/:id/public-link`, async ({ request, params }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const state = getMockState()
+      const record = state.records.find(({ invoice }) => invoice.id === params.id)
+      if (!record) return errorResponse(404, 'invoice_not_found', 'That invoice does not exist.')
+      if (record.invoice.status === 'draft' || record.invoice.status === 'cancelled') {
+        return errorResponse(409, 'not_shareable', 'Only issued invoices can be shared.')
+      }
+
+      if (!record.invoice.publicToken) {
+        record.invoice.publicToken = `token_${crypto.randomUUID().slice(0, 16)}`
+      }
+      return HttpResponse.json({
+        token: record.invoice.publicToken,
+        path: `/pay/${record.invoice.publicToken}`,
+      })
+    }),
+
+    http.delete(`${baseUrl}/invoices/:id/public-link`, async ({ request, params }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const state = getMockState()
+      const record = state.records.find(({ invoice }) => invoice.id === params.id)
+      if (!record) return errorResponse(404, 'invoice_not_found', 'That invoice does not exist.')
+
+      record.invoice.publicToken = undefined
+      return new HttpResponse(null, { status: 204 })
+    }),
+
     http.get(`${baseUrl}/reports/summary`, async ({ request }) => {
       const blocked = guard(request)
       if (blocked) return blocked
@@ -213,6 +341,163 @@ export function createHandlers(baseUrl: string) {
         revenueThisMonth: fromMinor(sumMinor(revenue)),
         overdueCount: overdue.length,
         overdueTotal: fromMinor(sumMinor(overdue.map((invoice) => invoice.amountDue))),
+      })
+    }),
+
+    http.get(`${baseUrl}/reports/gst-summary`, async ({ request }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      return HttpResponse.json({
+        fromDate: '2026-04-01',
+        toDate: '2027-03-31',
+        months: [
+          {
+            month: '2026-10',
+            invoiceCount: 4,
+            taxableValue: '175000.00',
+            cgst: '15750.00',
+            sgst: '15750.00',
+            igst: '0.00',
+            totalTax: '31500.00',
+          },
+        ],
+        bySupplyType: [
+          {
+            supplyType: 'intra_state',
+            invoiceCount: 4,
+            taxableValue: '175000.00',
+            cgst: '15750.00',
+            sgst: '15750.00',
+            igst: '0.00',
+            totalTax: '31500.00',
+          },
+        ],
+        totals: {
+          invoiceCount: 4,
+          taxableValue: '175000.00',
+          cgst: '15750.00',
+          sgst: '15750.00',
+          igst: '0.00',
+          totalTax: '31500.00',
+        },
+      })
+    }),
+
+    http.get(`${baseUrl}/reports/hsn-summary`, async ({ request }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      return HttpResponse.json({
+        fromDate: '2026-04-01',
+        toDate: '2027-03-31',
+        rows: [
+          {
+            hsnSac: '998311',
+            invoiceCount: 3,
+            taxableValue: '125000.00',
+            cgst: '11250.00',
+            sgst: '11250.00',
+            igst: '0.00',
+            totalTax: '22500.00',
+          },
+        ],
+      })
+    }),
+
+    http.get(`${baseUrl}/reports/tds`, async ({ request }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      return HttpResponse.json({
+        financialYear: '2026-27',
+        fromDate: '2026-04-01',
+        toDate: '2027-03-31',
+        rows: [
+          {
+            customerId: 'cus_adtech',
+            customerName: 'AdTech Solutions Pvt Ltd',
+            paymentCount: 1,
+            cashReceived: '60000.00',
+            tdsDeducted: '12000.00',
+          },
+        ],
+        totalCashReceived: '60000.00',
+        totalTdsDeducted: '12000.00',
+      })
+    }),
+
+    http.get(`${baseUrl}/reports/receivables-aging`, async ({ request }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      return HttpResponse.json({
+        asOf: '2026-11-01',
+        buckets: [
+          { bucket: '0_30', invoiceCount: 2, amountDue: '69600.00' },
+          { bucket: '31_60', invoiceCount: 0, amountDue: '0.00' },
+          { bucket: '61_90', invoiceCount: 0, amountDue: '0.00' },
+          { bucket: '90_plus', invoiceCount: 1, amountDue: '35400.00' },
+        ],
+        totalDue: '105000.00',
+      })
+    }),
+
+    http.get(`${baseUrl}/exports/invoices.csv`, async ({ request }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const csv = 'invoice_number,customer,issue_date,due_date,total,amount_due\nINV-0005,AdTech,2026-10-01,2026-10-15,141600.00,69600.00'
+      return new HttpResponse(csv, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="invoices_export.csv"',
+        },
+      })
+    }),
+
+    http.get(`${baseUrl}/exports/payments.csv`, async ({ request }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const csv = 'payment_id,invoice_number,date,cash_received,tds_deducted\npay_01,INV-0005,2026-10-10,60000.00,12000.00'
+      return new HttpResponse(csv, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="payments_export.csv"',
+        },
+      })
+    }),
+
+    http.put(`${baseUrl}/me/profile`, async ({ request }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const body = await readJson<any>(request)
+      return HttpResponse.json({
+        stateCode: body?.stateCode ?? '29',
+        businessName: body?.businessName ?? null,
+      })
+    }),
+
+    http.get(`${baseUrl}/me`, async ({ request }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      // Return a sensible mock profile. In a real test you'd read/write this from
+      // getMockState() once the state store tracks profile data.
+      return HttpResponse.json({
+        id: 'user_mock_001',
+        stateCode: '29',
+        businessName: 'Acme Studio Technologies',
       })
     }),
 
@@ -238,11 +523,17 @@ export function createHandlers(baseUrl: string) {
         return errorResponse(400, 'idempotency_key_required', 'An Idempotency-Key header is required.')
 
       const body = await readJson<ChatResumeRequest>(request)
-      if (typeof body?.threadId !== 'string' || !body.decision || !DECISIONS.includes(body.decision)) {
-        return errorResponse(422, 'invalid_request', 'A threadId and a valid decision are required.')
+      if (
+        typeof body?.threadId !== 'string' ||
+        typeof body?.approvalId !== 'string' ||
+        !body.decision ||
+        !DECISIONS.includes(body.decision)
+      ) {
+        return errorResponse(422, 'invalid_request', 'A threadId, approvalId and a valid decision are required.')
       }
       const resume: ChatResumeRequest = {
         threadId: body.threadId,
+        approvalId: body.approvalId,
         decision: body.decision,
         edits: body.edits,
       }
@@ -267,6 +558,19 @@ export function createHandlers(baseUrl: string) {
       const events: ChatEvent[] = result.events
       replays.set(key, { fingerprint, events })
       return sseResponse(eventSteps(events))
+    }),
+
+    http.get(`${baseUrl}/chat/threads/:threadId`, async ({ request, params }) => {
+      const blocked = guard(request)
+      if (blocked) return blocked
+      await mockSleep(REST_LATENCY_MS)
+
+      const threadId = String(params.threadId)
+
+      // Return any pending approval the mock chat flow registered for this thread.
+      const pendingApproval = getMockState().pendingApprovals.get(threadId) ?? null
+
+      return HttpResponse.json({ threadId, pendingApproval })
     }),
 
     http.get(`${baseUrl}/public/invoices/:token`, async ({ params }) => {

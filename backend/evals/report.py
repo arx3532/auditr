@@ -62,4 +62,4 @@ def render_markdown(results: list[CaseResult], *, model: str) -> str:
 
 
 def write_report(path: str, text: str) -> None:
-    Path(path).write_text(text, encoding="utf-8")
+    Path(path).open("a", encoding="utf-8").write(text)

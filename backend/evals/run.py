@@ -39,11 +39,14 @@ def _ascii(text: str) -> str:
     return text.encode("ascii", "replace").decode()
 
 
-def _print_progress(result: CaseResult) -> None:
+def _print_progress(result: CaseResult, verbose: bool) -> None:
     status = "ERROR" if result.error else ("PASS" if result.passed else "FAIL")
     print(f"{status:5} {result.case_id:22} {result.latency:5.1f}s  {result.llm_calls} call(s)")
     for problem in (*result.failures, *([result.error] if result.error else [])):
         print("      - " + _ascii(problem))
+    if verbose and not result.passed:
+        for line in result.transcript:
+            print("        | " + _ascii(line))
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -62,21 +65,27 @@ async def _run(args: argparse.Namespace) -> int:
         return 2
 
     print(f"Model: {settings.llm_model}   Cases: {len(cases)}   Repeat: {args.repeat}")
+    collected: list[CaseResult] = []
+
+    def progress(result: CaseResult) -> None:
+        collected.append(result)
+        _print_progress(result, args.verbose)
+
     pool, checkpointer = await open_checkpointer(settings.database_url)
     try:
-        results = await run_all(
+        await run_all(
             cases,
             Context(llm=llm, checkpointer=checkpointer),
             repeat=args.repeat,
             pause=args.pause,
-            progress=_print_progress,
+            progress=progress,
         )
-    finally:
+    finally:  # also runs on Ctrl+C, so a partial run still leaves a report
         await llm.aclose()
         await pool.close()
-
-    write_report(args.report, render_markdown(results, model=settings.llm_model))
-    rate = pass_rate(results)
+        if collected:
+            write_report(args.report, render_markdown(collected, model=settings.llm_model))
+    rate = pass_rate(collected)
     print(f"\nPass rate {rate:.1%}. Report written to {args.report}")
     return 0 if rate >= args.min_pass else 1
 
@@ -88,6 +97,9 @@ def main() -> int:
     parser.add_argument("--pause", type=float, default=1.5, help="seconds between runs")
     parser.add_argument("--min-pass", type=float, default=0.8, help="exit 1 below this rate")
     parser.add_argument("--report", default="evals/report.md")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="show the last steps of failures"
+    )
     args = parser.parse_args()
     command.upgrade(Config("alembic.ini"), "head")
     return asyncio.run(_run(args))

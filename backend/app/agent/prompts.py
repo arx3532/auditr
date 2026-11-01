@@ -27,6 +27,12 @@ Rules
 - After an action is approved, rejected or expires, you receive a message with the
   outcome. Confirm it briefly using only the facts in that message.
 - Keep replies short and plain.
+- For a payment, do not ask for the payment date or for TDS. Leave paid_on out when the
+  user gives no date (it defaults to today) and use 0 for TDS when they do not mention it.
+  The user checks both on the approval card before anything is recorded.
+- Create a draft as soon as you have the customer, the amount, the GST rate, the due date
+  and what the work was for. Ask only for what is missing, in one short message. Do not ask
+  the user to confirm a customer name when exactly one customer matches.
 """
 
 

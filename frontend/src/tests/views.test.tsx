@@ -59,6 +59,20 @@ describe('InvoiceDetailView', () => {
     expect(screen.getAllByText(/AdTech Solutions Pvt Ltd/).length).toBeGreaterThan(0)
   })
 
+  it('renders record payment and share link actions on an issued invoice', async () => {
+    renderWithQuery(<InvoiceDetailView id="inv_0005" />)
+    expect((await screen.findAllByRole('button', { name: /record payment/i })).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /copy public link/i })).toBeInTheDocument()
+  })
+
+  it('renders draft review bar and draft actions on a draft invoice', async () => {
+    renderWithQuery(<InvoiceDetailView id="inv_0010" />)
+    expect(await screen.findByText('This invoice is a draft')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /confirm & issue/i })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /edit draft/i }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /cancel draft/i })).toBeInTheDocument()
+  })
+
   it('shows not found for an unknown invoice', async () => {
     renderWithQuery(<InvoiceDetailView id="inv_missing" />)
     expect(await screen.findByText('Invoice not found')).toBeInTheDocument()

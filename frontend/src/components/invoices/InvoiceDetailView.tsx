@@ -7,16 +7,20 @@ import { ErrorState } from '@/components/common/ErrorState'
 import { DetailSkeleton } from '@/components/common/Skeletons'
 import { buttonVariants } from '@/components/ui/button'
 import { isApiError } from '@/lib/api/client'
-import { useInvoiceQuery } from '@/lib/api/queries'
+import { useInvoicePaymentsQuery, useInvoiceQuery } from '@/lib/api/queries'
 import { cn } from '@/lib/utils'
 
 import { DraftReviewBar } from './DraftReviewBar'
 import { InvoiceDetail } from './InvoiceDetail'
 
 export function InvoiceDetailView({ id }: { id: string }) {
-  const query = useInvoiceQuery(id)
+  const invoiceQuery = useInvoiceQuery(id)
+  const paymentsQuery = useInvoicePaymentsQuery(id)
 
-  const notFound = isApiError(query.error) && query.error.kind === 'not_found'
+  const notFound = isApiError(invoiceQuery.error) && invoiceQuery.error.kind === 'not_found'
+
+  // Show skeleton while either core query is loading for the first time.
+  const isPending = invoiceQuery.isPending || paymentsQuery.isPending
 
   return (
     <div className="flex flex-col gap-4">
@@ -25,18 +29,23 @@ export function InvoiceDetailView({ id }: { id: string }) {
         All invoices
       </Link>
 
-      {query.isPending ? (
+      {isPending ? (
         <DetailSkeleton />
-      ) : query.isError ? (
+      ) : invoiceQuery.isError ? (
         <ErrorState
           title={notFound ? 'Invoice not found' : 'Could not load this invoice'}
-          error={query.error}
-          onRetry={() => void query.refetch()}
+          error={invoiceQuery.error}
+          onRetry={() => void invoiceQuery.refetch()}
         />
       ) : (
         <>
-          {query.data.status === 'draft' ? <DraftReviewBar invoiceId={query.data.id} /> : null}
-          <InvoiceDetail invoice={query.data} />
+          {invoiceQuery.data.status === 'draft' ? (
+            <DraftReviewBar invoiceId={invoiceQuery.data.id} />
+          ) : null}
+          <InvoiceDetail
+            invoice={invoiceQuery.data}
+            payments={paymentsQuery.data ?? []}
+          />
         </>
       )}
     </div>

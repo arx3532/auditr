@@ -15,12 +15,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Invoice } from '@/lib/api/types'
+import type { PublicInvoice as PublicInvoiceData } from '@/lib/api/types'
 import { formatRate } from '@/lib/format/money'
 
-import { UpiPlaceholder } from './UpiPlaceholder'
-
-function StatusNotice({ status }: { status: Invoice['status'] }) {
+function StatusNotice({ status }: { status: PublicInvoiceData['status'] }) {
   if (status === 'paid') {
     return (
       <Alert>
@@ -43,8 +41,7 @@ function StatusNotice({ status }: { status: Invoice['status'] }) {
 }
 
 /** Read-only, presentational. Every figure is shown exactly as the server returned it. */
-export function PublicInvoice({ invoice }: { invoice: Invoice }) {
-  const payable = invoice.status !== 'paid' && invoice.status !== 'cancelled'
+export function PublicInvoice({ invoice }: { invoice: PublicInvoiceData }) {
 
   return (
     <article className="flex flex-col gap-6" aria-labelledby="public-invoice-heading">
@@ -55,7 +52,10 @@ export function PublicInvoice({ invoice }: { invoice: Invoice }) {
           </h1>
           <InvoiceStatusBadge status={invoice.status} />
         </div>
-        <p className="text-sm text-muted-foreground">Billed to {invoice.customer.name}</p>
+        {invoice.supplierName ? (
+          <p className="text-sm font-medium text-foreground">From {invoice.supplierName}</p>
+        ) : null}
+        <p className="text-sm text-muted-foreground">Billed to {invoice.customerName}</p>
       </header>
 
       <StatusNotice status={invoice.status} />
@@ -86,8 +86,6 @@ export function PublicInvoice({ invoice }: { invoice: Invoice }) {
           </dl>
         </CardContent>
       </Card>
-
-      {payable ? <UpiPlaceholder /> : null}
 
       <Card>
         <CardHeader>

@@ -71,7 +71,11 @@ function memoryStorage(initial: string | null = null): ThreadStorage & { value: 
 
 const startChat = vi.fn<ApiEndpoints['startChat']>()
 const resumeChat = vi.fn<ApiEndpoints['resumeChat']>()
-const api = { startChat, resumeChat }
+const getThread = vi.fn<ApiEndpoints['getThread']>().mockResolvedValue({
+  threadId: '',
+  pendingApproval: null,
+})
+const api = { startChat, resumeChat, getThread }
 
 function setup(storage: ThreadStorage = memoryStorage()) {
   return renderHook(() => useChatStream(api, { storage }))
@@ -92,6 +96,7 @@ const draftOnTheWire = JSON.parse(JSON.stringify(draft)) as typeof draft
 beforeEach(() => {
   startChat.mockReset()
   resumeChat.mockReset()
+  getThread.mockResolvedValue({ threadId: '', pendingApproval: null })
 })
 
 describe('useChatStream', () => {
@@ -170,7 +175,7 @@ describe('useChatStream', () => {
     await waitFor(() => expect(result.current.state.status).toBe('idle'))
 
     expect(resumeChat).toHaveBeenCalledWith(
-      { threadId: 'thr_1', decision: 'approve' },
+      { threadId: 'thr_1', approvalId: 'apr_1', decision: 'approve' },
       expect.stringMatching(/^[0-9a-f-]{36}$/),
       expect.any(AbortSignal),
     )
@@ -188,11 +193,14 @@ describe('useChatStream', () => {
     await reachApproval(result)
 
     resumeChat.mockResolvedValueOnce(eventsResponse([thread, approval('apr_2')]))
-    act(() => result.current.decide('edit', { amount: '60000.00' }))
+    const sampleEdits = {
+      items: [{ description: 'Design', taxableValue: '60000.00', gstRate: '18' }],
+    }
+    act(() => result.current.decide('edit', sampleEdits))
     await waitFor(() => expect(result.current.state.status).toBe('awaiting_approval'))
 
     expect(resumeChat).toHaveBeenCalledWith(
-      { threadId: 'thr_1', decision: 'edit', edits: { amount: '60000.00' } },
+      { threadId: 'thr_1', approvalId: 'apr_1', decision: 'edit', edits: sampleEdits },
       expect.any(String),
       expect.any(AbortSignal),
     )

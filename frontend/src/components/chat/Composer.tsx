@@ -68,6 +68,7 @@ export function Composer({ onSend, onStop, busy, disabled, hint }: ComposerProps
       <div
         className={cn(
           'flex items-end gap-2 rounded-3xl border border-border bg-card p-2 pl-4 shadow-sm transition-[border-color,box-shadow] duration-200',
+          'dark:border-white/[0.05]',
           'focus-within:border-ring/50 focus-within:shadow-md focus-within:ring-4 focus-within:ring-ring/10',
           disabled && !busy && 'bg-muted/40 opacity-70',
         )}

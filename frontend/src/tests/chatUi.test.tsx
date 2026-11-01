@@ -155,12 +155,26 @@ describe('DraftInvoiceCard', () => {
     const save = await screen.findByRole('button', { name: /save changes/i })
     expect(save).toBeDisabled()
 
-    const amount = screen.getByLabelText(/amount/i)
+    // The field is labelled "Amount (INR, before tax)" — match by the label text.
+    const amount = screen.getByLabelText(/amount \(inr/i)
     await user.clear(amount)
     await user.type(amount, '60000')
     await user.click(save)
 
-    await waitFor(() => expect(onDecide).toHaveBeenCalledWith('edit', { amount: '60000' }))
+    // toDraftEdits sends the full items replacement array (backend requires all fields).
+    // Only the taxableValue changed, so customerId and dueDate are omitted.
+    await waitFor(() =>
+      expect(onDecide).toHaveBeenCalledWith('edit', {
+        items: [
+          {
+            description: DRAFT.items[0].description,
+            hsnSac: DRAFT.items[0].hsnSac,
+            taxableValue: '60000',
+            gstRate: DRAFT.items[0].gstRate,
+          },
+        ],
+      }),
+    )
   })
 
   it('rejects an invalid amount without sending anything', async () => {
@@ -171,7 +185,7 @@ describe('DraftInvoiceCard', () => {
     )
 
     await user.click(screen.getByRole('button', { name: /edit/i }))
-    const amount = await screen.findByLabelText(/amount/i)
+    const amount = await screen.findByLabelText(/amount \(inr/i)
     await user.clear(amount)
     await user.type(amount, '12.345')
     await user.click(screen.getByRole('button', { name: /save changes/i }))

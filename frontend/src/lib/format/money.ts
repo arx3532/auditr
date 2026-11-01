@@ -21,3 +21,24 @@ export function formatMoney(value: string): string {
 export function formatRate(rate: string): string {
   return `${rate}%`
 }
+
+/**
+ * Adds two server-provided decimal strings without floating-point error.
+ * Both values are normalised to whole cents (2 decimal places) as BigInts,
+ * summed, then converted back to a "NNNN.NN" string for display.
+ *
+ * Only supports non-negative values with at most 2 decimal places — exactly
+ * the format that the FastAPI backend emits for all monetary fields.
+ */
+export function addDecimalStrings(a: string, b: string): string {
+  function toCents(s: string): bigint {
+    const m = DECIMAL_STRING.exec(s.trim())
+    if (!m) return 0n
+    const [, , integer, fraction = ''] = m
+    return BigInt(integer) * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2))
+  }
+  const total = toCents(a) + toCents(b)
+  const intPart = total / 100n
+  const fracPart = total % 100n
+  return `${intPart}.${String(fracPart).padStart(2, '0')}`
+}

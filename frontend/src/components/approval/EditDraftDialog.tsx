@@ -17,7 +17,13 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCustomersQuery } from '@/lib/api/queries'
-import { draftEditFormSchema, draftToFormValues, toDraftEdits, type DraftEditForm } from '@/lib/api/schemas'
+import {
+  draftEditFormSchema,
+  draftToFormValues,
+  GST_RATES,
+  toDraftEdits,
+  type DraftEditForm,
+} from '@/lib/api/schemas'
 import type { DraftEdits, Invoice } from '@/lib/api/types'
 
 interface EditDraftDialogProps {
@@ -34,8 +40,8 @@ export function EditDraftDialog({ open, onOpenChange, draft, onSubmit }: EditDra
         <DialogHeader>
           <DialogTitle>Edit draft</DialogTitle>
           <DialogDescription>
-            Change the details below. The server recalculates tax and totals and sends back a new draft for
-            you to review.
+            Change the details below. The server recalculates tax and totals and sends back a new
+            draft for you to review.
           </DialogDescription>
         </DialogHeader>
         <EditDraftForm draft={draft} onCancel={() => onOpenChange(false)} onSubmit={onSubmit} />
@@ -50,17 +56,15 @@ interface EditDraftFormProps {
   onSubmit: (edits: DraftEdits) => void
 }
 
-/** Mounted only while the dialog is open, so every open starts from the current draft. */
+/** Mounted only while the dialog is open, so every open starts fresh from the current draft. */
 function EditDraftForm({ draft, onCancel, onSubmit }: EditDraftFormProps) {
   const initial = useMemo(() => draftToFormValues(draft), [draft])
   const customers = useCustomersQuery()
 
   const customerOptions = useMemo(() => {
     const known = customers.data ?? []
-    const list = known.some((customer) => customer.id === draft.customer.id)
-      ? known
-      : [draft.customer, ...known]
-    return list.map((customer) => ({ value: customer.id, label: customer.name }))
+    const list = known.some((c) => c.id === draft.customer.id) ? known : [draft.customer, ...known]
+    return list.map((c) => ({ value: c.id, label: c.name }))
   }, [customers.data, draft.customer])
 
   const {
@@ -80,6 +84,7 @@ function EditDraftForm({ draft, onCancel, onSubmit }: EditDraftFormProps) {
       className="flex flex-col gap-4"
     >
       <FieldGroup>
+        {/* Customer */}
         <Field data-invalid={errors.customerId ? true : undefined}>
           <FieldLabel htmlFor="edit-customer">Customer</FieldLabel>
           <Controller
@@ -111,6 +116,19 @@ function EditDraftForm({ draft, onCancel, onSubmit }: EditDraftFormProps) {
           {errors.customerId ? <FieldError>{errors.customerId.message}</FieldError> : null}
         </Field>
 
+        {/* Due date */}
+        <Field data-invalid={errors.dueDate ? true : undefined}>
+          <FieldLabel htmlFor="edit-due-date">Due date</FieldLabel>
+          <Input
+            id="edit-due-date"
+            type="date"
+            aria-invalid={errors.dueDate ? true : undefined}
+            {...register('dueDate')}
+          />
+          {errors.dueDate ? <FieldError>{errors.dueDate.message}</FieldError> : null}
+        </Field>
+
+        {/* Line-item description */}
         <Field data-invalid={errors.description ? true : undefined}>
           <FieldLabel htmlFor="edit-description">Description</FieldLabel>
           <Input
@@ -122,27 +140,62 @@ function EditDraftForm({ draft, onCancel, onSubmit }: EditDraftFormProps) {
           {errors.description ? <FieldError>{errors.description.message}</FieldError> : null}
         </Field>
 
-        <Field data-invalid={errors.amount ? true : undefined}>
-          <FieldLabel htmlFor="edit-amount">Amount (INR, before tax)</FieldLabel>
+        {/* Taxable value (replaces the old "amount" field) */}
+        <Field data-invalid={errors.taxableValue ? true : undefined}>
+          <FieldLabel htmlFor="edit-taxable-value">Amount (INR, before tax)</FieldLabel>
           <Input
-            id="edit-amount"
+            id="edit-taxable-value"
             inputMode="decimal"
             autoComplete="off"
-            aria-invalid={errors.amount ? true : undefined}
-            {...register('amount')}
+            aria-invalid={errors.taxableValue ? true : undefined}
+            {...register('taxableValue')}
           />
-          {errors.amount ? <FieldError>{errors.amount.message}</FieldError> : null}
+          {errors.taxableValue ? <FieldError>{errors.taxableValue.message}</FieldError> : null}
         </Field>
 
-        <Field data-invalid={errors.dueDate ? true : undefined}>
-          <FieldLabel htmlFor="edit-due-date">Due date</FieldLabel>
+        {/* HSN / SAC code */}
+        <Field data-invalid={errors.hsnSac ? true : undefined}>
+          <FieldLabel htmlFor="edit-hsn-sac">HSN / SAC code (optional)</FieldLabel>
           <Input
-            id="edit-due-date"
-            type="date"
-            aria-invalid={errors.dueDate ? true : undefined}
-            {...register('dueDate')}
+            id="edit-hsn-sac"
+            autoComplete="off"
+            placeholder="e.g. 998314"
+            aria-invalid={errors.hsnSac ? true : undefined}
+            {...register('hsnSac')}
           />
-          {errors.dueDate ? <FieldError>{errors.dueDate.message}</FieldError> : null}
+          {errors.hsnSac ? <FieldError>{errors.hsnSac.message}</FieldError> : null}
+        </Field>
+
+        {/* GST rate */}
+        <Field data-invalid={errors.gstRate ? true : undefined}>
+          <FieldLabel htmlFor="edit-gst-rate">GST rate</FieldLabel>
+          <Controller
+            control={control}
+            name="gstRate"
+            render={({ field }) => (
+              <Select
+                items={GST_RATES.map((r) => ({ value: r, label: `${r}%` }))}
+                value={field.value}
+                onValueChange={(next) => field.onChange(next ?? '18')}
+              >
+                <SelectTrigger
+                  id="edit-gst-rate"
+                  className="w-full"
+                  aria-invalid={errors.gstRate ? true : undefined}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  {GST_RATES.map((rate) => (
+                    <SelectItem key={rate} value={rate}>
+                      {rate}%
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {errors.gstRate ? <FieldError>{errors.gstRate.message}</FieldError> : null}
         </Field>
       </FieldGroup>
 

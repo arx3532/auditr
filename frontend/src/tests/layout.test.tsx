@@ -25,6 +25,13 @@ describe('isActivePath', () => {
   })
 
   it('exposes every primary section', () => {
-    expect(navItems.map((item) => item.href)).toEqual(['/dashboard', '/chat', '/invoices', '/customers'])
+    expect(navItems.map((item) => item.href)).toEqual([
+      '/dashboard',
+      '/chat',
+      '/invoices',
+      '/customers',
+      '/reports',
+      '/settings',
+    ])
   })
 })

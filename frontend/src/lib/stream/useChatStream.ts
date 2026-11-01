@@ -20,7 +20,7 @@ import { StreamProtocolError } from './errors'
 import { parseSse } from './parseSse'
 import { sessionThreadStorage, type ThreadStorage } from './threadStorage'
 
-type ChatApi = Pick<ApiEndpoints, 'startChat' | 'resumeChat'>
+type ChatApi = Pick<ApiEndpoints, 'startChat' | 'resumeChat' | 'getThread'>
 
 export interface UseChatStreamOptions {
   /** Where the thread id is kept between page loads. Keep the reference stable. */
@@ -82,6 +82,24 @@ export function useChatStream(
     const saved = storage.load()
     if (saved) dispatch({ type: 'restore', threadId: saved })
   }, [storage])
+
+  // After the thread id is restored from storage, query the server for any
+  // pending approval that was in-flight before the page was refreshed.
+  // We only run this once per mount (api reference is stable via useMemo).
+  useEffect(() => {
+    const threadId = storage.load()
+    if (!threadId) return
+
+    let cancelled = false
+    void api.getThread(threadId).then((view) => {
+      if (cancelled || !view.pendingApproval) return
+      dispatch({ type: 'rehydrate', threadId: view.threadId, pendingApproval: view.pendingApproval })
+    }).catch(() => {
+      // Silently ignore — a 404 means the thread expired or belongs to a different user.
+    })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally runs once on mount; api and storage references are stable
 
   useEffect(() => {
     return () => controllerRef.current?.abort()
@@ -159,7 +177,9 @@ export function useChatStream(
       dispatch({ type: 'decision_started', decision, edits: payloadEdits })
       void run((signal) =>
         api.resumeChat(
-          payloadEdits ? { threadId, decision, edits: payloadEdits } : { threadId, decision },
+          payloadEdits
+            ? { threadId, approvalId: approval.approvalId, decision, edits: payloadEdits }
+            : { threadId, approvalId: approval.approvalId, decision },
           key,
           signal,
         ),

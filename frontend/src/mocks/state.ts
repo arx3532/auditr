@@ -1,4 +1,4 @@
-import type { ChatEvent, Customer, Invoice } from '@/lib/api/types'
+import type { ChatEvent, Customer, Invoice, PendingApprovalPayload } from '@/lib/api/types'
 
 import { CUSTOMERS, createInitialRecords, type InvoiceRecord } from './fixtures'
 
@@ -17,6 +17,12 @@ export interface MockState {
   /** Issue requests already applied, keyed by Idempotency-Key, mapping to the invoice id. */
   issueKeys: Map<string, string>
   nextInvoiceNumber: number
+  /**
+   * Server-side pending approvals keyed by thread id.
+   * Populated by the mock chat flow when an approval_required event is emitted,
+   * so GET /chat/threads/:id can return the rehydration payload.
+   */
+  pendingApprovals: Map<string, PendingApprovalPayload>
 }
 
 function createState(): MockState {
@@ -27,6 +33,7 @@ function createState(): MockState {
     replays: new Map(),
     issueKeys: new Map(),
     nextInvoiceNumber: 11,
+    pendingApprovals: new Map(),
   }
 }
 

@@ -23,11 +23,14 @@ async function readEvents(response: Response): Promise<ChatEvent[]> {
   return parseEvents(await response.text())
 }
 
-async function startDraftThread(): Promise<string> {
+async function startDraft(): Promise<{ threadId: string; approvalId: string }> {
   const events = await readEvents(await api.startChat({ message: 'Invoice AdTech ₹50,000, due the 15th' }))
   const thread = events.find((event) => event.type === 'thread')
-  if (thread?.type !== 'thread') throw new Error('No thread event')
-  return thread.threadId
+  const approval = events.find((event) => event.type === 'approval_required')
+  if (thread?.type !== 'thread' || approval?.type !== 'approval_required') {
+    throw new Error('No thread or approval event')
+  }
+  return { threadId: thread.threadId, approvalId: approval.approvalId }
 }
 
 describe('fixtures', () => {
@@ -93,7 +96,8 @@ describe('REST handlers', () => {
     const { items } = await api.listInvoices({ status: 'partially_paid' })
     const detail = await api.getInvoice(items[0].id)
     expect(detail.amountDue).toBe('69600.00')
-    expect(detail.payments).toEqual([
+    const payments = await api.listInvoicePayments(items[0].id)
+    expect(payments).toEqual([
       expect.objectContaining({ cashReceived: '60000.00', tdsDeducted: '12000.00' }),
     ])
   })
@@ -115,7 +119,7 @@ describe('REST handlers', () => {
   it('serves public invoices by token and distinguishes revoked from unknown', async () => {
     const { items } = await api.listInvoices({ status: 'issued' })
     const token = items[0].publicToken ?? ''
-    expect((await api.getPublicInvoice(token)).id).toBe(items[0].id)
+    expect((await api.getPublicInvoice(token)).number).toBe(items[0].number)
     await expect(api.getPublicInvoice('revoked-demo-token')).rejects.toMatchObject({ kind: 'gone' })
     await expect(api.getPublicInvoice('nope')).rejects.toMatchObject({ kind: 'not_found' })
   })
@@ -191,7 +195,10 @@ describe('chat stream', () => {
     const threadId = events.find((event) => event.type === 'thread')
     if (threadId?.type !== 'thread') throw new Error('No thread')
     const resumed = await readEvents(
-      await api.resumeChat({ threadId: threadId.threadId, decision: 'approve' }, 'key-expired'),
+      await api.resumeChat(
+        { threadId: threadId.threadId, approvalId: approval.approvalId, decision: 'approve' },
+        'key-expired',
+      ),
     )
     expect(resumed.at(-1)).toMatchObject({ type: 'error', code: 'approval_expired' })
   })
@@ -199,8 +206,10 @@ describe('chat stream', () => {
 
 describe('chat resume', () => {
   it('issues the invoice on approve and lists it afterwards', async () => {
-    const threadId = await startDraftThread()
-    const events = await readEvents(await api.resumeChat({ threadId, decision: 'approve' }, 'key-approve'))
+    const { threadId, approvalId } = await startDraft()
+    const events = await readEvents(
+      await api.resumeChat({ threadId, approvalId, decision: 'approve' }, 'key-approve'),
+    )
 
     const issued = events.find((event) => event.type === 'invoice_issued')
     if (issued?.type !== 'invoice_issued') throw new Error('Expected invoice_issued')
@@ -212,8 +221,8 @@ describe('chat resume', () => {
   })
 
   it('replays the same result for a retried Idempotency-Key instead of issuing twice', async () => {
-    const threadId = await startDraftThread()
-    const body = { threadId, decision: 'approve' as const }
+    const { threadId, approvalId } = await startDraft()
+    const body = { threadId, approvalId, decision: 'approve' as const }
 
     const first = await readEvents(await api.resumeChat(body, 'key-retry'))
     const second = await readEvents(await api.resumeChat(body, 'key-retry'))
@@ -227,21 +236,29 @@ describe('chat resume', () => {
   })
 
   it('rejects reusing an Idempotency-Key for a different decision', async () => {
-    const threadId = await startDraftThread()
-    await readEvents(await api.resumeChat({ threadId, decision: 'reject' }, 'key-reuse'))
+    const { threadId, approvalId } = await startDraft()
+    await readEvents(await api.resumeChat({ threadId, approvalId, decision: 'reject' }, 'key-reuse'))
 
     const error = await api
-      .resumeChat({ threadId, decision: 'approve' }, 'key-reuse')
+      .resumeChat({ threadId, approvalId, decision: 'approve' }, 'key-reuse')
       .catch((e: unknown) => e)
 
     expect(isApiError(error) && error.code).toBe('idempotency_key_reuse')
   })
 
   it('recomputes tax on the server for an edit and asks for approval again', async () => {
-    const threadId = await startDraftThread()
+    const { threadId, approvalId } = await startDraft()
     const events = await readEvents(
       await api.resumeChat(
-        { threadId, decision: 'edit', edits: { customerId: 'cus_bluepeak', amount: '75000.00' } },
+        {
+          threadId,
+          approvalId,
+          decision: 'edit',
+          edits: {
+            customerId: 'cus_bluepeak',
+            items: [{ description: 'Design services', taxableValue: '75000.00', gstRate: '18' }],
+          },
+        },
         'key-edit',
       ),
     )
@@ -257,22 +274,34 @@ describe('chat resume', () => {
   })
 
   it('rejects invalid edits with a validation error', async () => {
-    const threadId = await startDraftThread()
+    const { threadId, approvalId } = await startDraft()
     await expect(
-      api.resumeChat({ threadId, decision: 'edit', edits: { amount: '-5' } }, 'key-bad-edit'),
+      api.resumeChat(
+        {
+          threadId,
+          approvalId,
+          decision: 'edit',
+          edits: {
+            items: [{ description: 'Design', taxableValue: '-5', gstRate: '18' }],
+          },
+        },
+        'key-bad-edit',
+      ),
     ).rejects.toMatchObject({ kind: 'client', code: 'invalid_amount' })
   })
 
   it('discards the draft on reject without issuing anything', async () => {
-    const threadId = await startDraftThread()
-    const events = await readEvents(await api.resumeChat({ threadId, decision: 'reject' }, 'key-reject'))
+    const { threadId, approvalId } = await startDraft()
+    const events = await readEvents(
+      await api.resumeChat({ threadId, approvalId, decision: 'reject' }, 'key-reject'),
+    )
     expect(events.at(-1)).toEqual({ type: 'done' })
     expect((await api.listInvoices()).items.some((invoice) => invoice.number === 'INV-0011')).toBe(false)
   })
 
   it('answers 404 when nothing is pending for the thread', async () => {
     await expect(
-      api.resumeChat({ threadId: 'thr_unknown', decision: 'approve' }, 'key-none'),
+      api.resumeChat({ threadId: 'thr_unknown', approvalId: 'apr_unknown', decision: 'approve' }, 'key-none'),
     ).rejects.toMatchObject({ kind: 'not_found', code: 'no_pending_approval' })
   })
 })

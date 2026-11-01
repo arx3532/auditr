@@ -125,28 +125,36 @@ function applyEdits(draft: Invoice, edits: DraftEdits): Invoice | Failure {
     : draft.customer
   if (!customer) return failure(422, 'unknown_customer', 'That customer does not exist.')
 
-  if (edits.amount !== undefined && (!AMOUNT_PATTERN.test(edits.amount) || Number(edits.amount) <= 0)) {
-    return failure(422, 'invalid_amount', 'Amount must be a positive decimal with up to two places.')
-  }
   if (edits.dueDate !== undefined && !DATE_PATTERN.test(edits.dueDate)) {
     return failure(422, 'invalid_due_date', 'Due date must be an ISO date (YYYY-MM-DD).')
   }
-  if (edits.description !== undefined && edits.description.trim() === '') {
-    return failure(422, 'invalid_description', 'Description cannot be empty.')
+
+  let items = draft.items
+  if (edits.items !== undefined) {
+    if (edits.items.length === 0) {
+      return failure(422, 'invalid_items', 'At least one line item is required.')
+    }
+    for (const item of edits.items) {
+      if (!AMOUNT_PATTERN.test(item.taxableValue) || Number(item.taxableValue) <= 0) {
+        return failure(422, 'invalid_amount', 'Amount must be a positive decimal with up to two places.')
+      }
+      if (item.description.trim() === '') {
+        return failure(422, 'invalid_description', 'Description cannot be empty.')
+      }
+    }
+    items = edits.items.map((i) => ({
+      description: i.description,
+      hsnSac: i.hsnSac,
+      taxableValue: i.taxableValue,
+      gstRate: i.gstRate,
+    }))
   }
 
-  const [current] = draft.items
   return buildInvoice({
     id: draft.id,
     customer,
     status: 'draft',
-    items: [
-      serviceItem(
-        edits.description?.trim() ?? current.description,
-        edits.amount ?? current.taxableValue,
-        !customer.stateCode,
-      ),
-    ],
+    items,
     dueDate: edits.dueDate ?? draft.dueDate,
   })
 }

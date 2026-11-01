@@ -28,7 +28,11 @@ from app.core.errors import DomainError
 from app.db.session import SessionLocal
 
 MAX_MESSAGES = 60
+EMPTY_REPLY = "Sorry, I could not come up with an answer. Please try again."
 
+
+def _is_empty(response: LLMResponse) -> bool:
+    return not response.text.strip() and not response.tool_calls
 
 class AgentState(TypedDict):
     messages: Annotated[list[dict[str, Any]], operator.add]  # append-only, OpenAI format
@@ -68,24 +72,34 @@ def build_graph(
     """One flat graph: agent -> run_tools -> (approval ->) agent. Built per request
     (cheap) so tests can swap the LLM; state lives in the shared checkpointer."""
 
-    async def agent_node(state: AgentState) -> dict[str, Any]:
-        writer = get_stream_writer()
-        messages = state["messages"]
-
-        if len(messages) > MAX_MESSAGES:
-            text = "This conversation has become long. Please start a new chat."
-            writer({"type": "text_delta", "text": text})
-            return {"messages": [{"role": "assistant", "context": text}]}
-        prompt = [{"role": "system", "content": system_prompt(today_ist())}, *messages]
-        safe = redact_messages(prompt, Redactor())  # defence in depth: the client also checks
+    async def call_model(
+        messages: list[dict[str, Any]], writer: Callable[[Any], None]
+    ) -> LLMResponse:
         response: LLMResponse | None = None
-        async for event in llm.stream(safe, agent_tools.TOOL_SPECS):
+        async for event in llm.stream(messages, agent_tools.TOOL_SPECS):
             if isinstance(event, TextDelta):
                 writer({"type": "text_delta", "text": event.text})
             elif isinstance(event, StreamDone):
                 response = event.response
         if response is None:
             raise LLMBadResponse("The LLM stream ended without a result")
+        return response
+
+    async def agent_node(state: AgentState) -> dict[str, Any]:
+        writer = get_stream_writer()
+        messages = state["messages"]
+        if len(messages) > MAX_MESSAGES:
+            text = "This conversation has become long. Please start a new chat."
+            writer({"type": "text_delta", "text": text})
+            return {"messages": [{"role": "assistant", "content": text}]}
+        prompt = [{"role": "system", "content": system_prompt(today_ist())}, *messages]
+        safe = redact_messages(prompt, Redactor())  # defence in depth: the client also checks
+        response = await call_model(safe, writer)
+        if _is_empty(response):  # some models occasionally return nothing: try once more
+            response = await call_model(safe, writer)
+        if _is_empty(response):
+            writer({"type": "text_delta", "text": EMPTY_REPLY})
+            return {"messages": [{"role": "assistant", "content": EMPTY_REPLY}]}
         return {"messages": [_assistant_message(response)]}
 
     async def tools_node(state: AgentState) -> dict[str, Any]:
