@@ -105,19 +105,69 @@ function defaultMessage(kind: ApiErrorKind): string {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** One readable line from a FastAPI validation `detail` array: "field: message". */
+function describeValidationIssue(issue: unknown): string | undefined {
+  if (!isRecord(issue) || typeof issue.msg !== 'string') return undefined
+  const path = Array.isArray(issue.loc)
+    ? issue.loc.filter((part) => part !== 'body' && part !== 'query' && part !== 'path').join('.')
+    : ''
+  return path ? `${path}: ${issue.msg}` : issue.msg
+}
+
+/**
+ * Reads an error body without ever throwing. Shapes, in priority order:
+ *   1. DomainError handler:   { error: { code, message } }          (the backend's own errors)
+ *   2. FastAPI validation:    { detail: [{ loc, msg, type }, ...] }  (422 from Pydantic)
+ *   3. FastAPI HTTPException: { detail: "text" }                     (e.g. 503 from /ready)
+ *   4. Flat fallback:         { code, message }
+ * Anything else keeps the status-based defaults.
+ */
+function parseErrorBody(body: unknown): { code?: string; message?: string } {
+  if (!isRecord(body)) return {}
+
+  const nested = body.error
+  if (isRecord(nested)) {
+    const code = typeof nested.code === 'string' ? nested.code : undefined
+    const message = typeof nested.message === 'string' ? nested.message : undefined
+    if (code || message) return { code, message }
+  }
+
+  if (Array.isArray(body.detail)) {
+    const lines = body.detail
+      .map(describeValidationIssue)
+      .filter((line): line is string => line !== undefined)
+    return {
+      code: 'validation_error',
+      message: lines.length > 0 ? lines.slice(0, 3).join('; ') : undefined,
+    }
+  }
+
+  if (typeof body.detail === 'string') {
+    return {
+      code: typeof body.code === 'string' ? body.code : undefined,
+      message: body.detail,
+    }
+  }
+
+  return {
+    code: typeof body.code === 'string' ? body.code : undefined,
+    message: typeof body.message === 'string' ? body.message : undefined,
+  }
+}
+
 async function toApiError(response: Response): Promise<ApiError> {
   const kind = kindForStatus(response.status)
   let code = kind === 'unauthorized' ? 'unauthorized' : `http_${response.status}`
   let message = defaultMessage(kind)
 
   try {
-    const body: unknown = await response.json()
-    if (body && typeof body === 'object') {
-      const record = body as Record<string, unknown>
-      if (typeof record.code === 'string') code = record.code
-      if (typeof record.message === 'string') message = record.message
-      else if (typeof record.detail === 'string') message = record.detail
-    }
+    const parsed = parseErrorBody(await response.json())
+    if (parsed.code) code = parsed.code
+    if (parsed.message) message = parsed.message
   } catch {
     // Non-JSON error body: keep the defaults.
   }

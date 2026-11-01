@@ -266,22 +266,59 @@ export interface ChatResumeRequest {
   edits?: DraftEdits
 }
 
+/**
+ * A record-payment approval: what will happen if the user confirms.
+ * Mirrors the `payment` object built by the backend's `build_approval_payload`.
+ */
+export interface PaymentApproval {
+  invoice: Invoice
+  cashReceived: string
+  tdsDeducted: string
+  date: string
+  amountDueAfter: string
+  statusAfter: InvoiceStatus
+}
+
+interface ApprovalRequiredBase {
+  type: 'approval_required'
+  approvalId: string
+  expiresAt: string
+}
+
+/**
+ * The graph paused for a human decision. Exactly one of `draft` (issue an invoice) or
+ * `payment` (record a payment) is present.
+ */
+export type ApprovalRequiredEvent =
+  | (ApprovalRequiredBase & { draft: Invoice; payment?: undefined })
+  | (ApprovalRequiredBase & { payment: PaymentApproval; draft?: undefined })
+
+/** How a pending approval ended. Mirrors the backend `Outcome.kind`. */
+export type ApprovalOutcome = 'approved' | 'rejected' | 'expired'
+
+/**
+ * Sent first on `POST /chat/resume` for an approve or reject decision, before any model text.
+ * `invoice` is present when an invoice was issued or a payment recorded against it;
+ * `payment` is present only for an approved record-payment decision.
+ */
+export interface ApprovalResolvedEvent {
+  type: 'approval_resolved'
+  approvalId: string
+  outcome: ApprovalOutcome
+  invoice?: Invoice
+  payment?: Payment
+}
+
 /** Server-sent events on `POST /chat` and `POST /chat/resume`. Each is JSON in `data:`. */
 export type ChatEvent =
   | { type: 'thread'; threadId: string }
   | { type: 'text_delta'; text: string }
   | { type: 'tool_start'; tool: string }
   | { type: 'tool_end'; tool: string }
-  | { type: 'approval_required'; approvalId: string; expiresAt: string; draft: Invoice }
+  | ApprovalRequiredEvent
+  | ApprovalResolvedEvent
   | { type: 'error'; code: string; message: string }
   | { type: 'done' }
-  | InvoiceIssuedEvent
-
-/** Emitted on POST /chat/resume after an `approve` decision. */
-export interface InvoiceIssuedEvent {
-  type: 'invoice_issued'
-  invoice: Invoice
-}
 
 // ---------------------------------------------------------------------------
 // Draft-edit contract (used by POST /chat/resume with decision: "edit")
@@ -349,28 +386,11 @@ export interface PendingApprovalPayload {
   /** Present for issue-invoice approvals. */
   draft?: Invoice
   /** Present for record-payment approvals. */
-  payment?: {
-    invoice: Invoice
-    cashReceived: string
-    tdsDeducted: string
-    date: string
-    amountDueAfter: string
-    statusAfter: InvoiceStatus
-  }
+  payment?: PaymentApproval
 }
 
 /** Mirrors the response of GET /chat/threads/:threadId. */
 export interface ThreadView {
   threadId: string
   pendingApproval: PendingApprovalPayload | null
-}
-
-// ---------------------------------------------------------------------------
-// Error body
-// ---------------------------------------------------------------------------
-
-/** JSON error body for non-2xx responses, mirroring the SSE `error` event. */
-export interface ApiErrorBody {
-  code: string
-  message: string
 }

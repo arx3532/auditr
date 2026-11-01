@@ -1,4 +1,12 @@
-import type { ChatEvent, ChatResumeRequest, DraftEdits, Invoice } from '@/lib/api/types'
+import type {
+  ApprovalRequiredEvent,
+  ChatEvent,
+  ChatResumeRequest,
+  DraftEdits,
+  Invoice,
+  Payment,
+  PaymentApproval,
+} from '@/lib/api/types'
 
 import { CUSTOMERS, customerById, isoDate, serviceItem } from './fixtures'
 import type { MockScenario } from './scenario'
@@ -28,14 +36,42 @@ function nextFifteenth(now: Date): string {
   return new Date(target).toISOString().slice(0, 10)
 }
 
-function approvalEvent(draft: Invoice, scenario: MockScenario): ChatEvent {
+function approvalMeta(scenario: MockScenario) {
   const offset = scenario === 'expired' ? -60_000 : APPROVAL_TTL_MS
   return {
-    type: 'approval_required',
     approvalId: `apr_${shortId()}`,
     expiresAt: new Date(Date.now() + offset).toISOString(),
-    draft,
   }
+}
+
+/** Also registers the approval, so `GET /chat/threads/:id` can rehydrate it after a refresh. */
+function approvalEvent(
+  threadId: string,
+  draft: Invoice,
+  scenario: MockScenario,
+): ApprovalRequiredEvent {
+  const meta = approvalMeta(scenario)
+  getMockState().pendingApprovals.set(threadId, { ...meta, kind: 'issue_invoice', draft })
+  return { type: 'approval_required', ...meta, draft }
+}
+
+function paymentApprovalEvent(
+  threadId: string,
+  payment: PaymentApproval,
+  scenario: MockScenario,
+): ApprovalRequiredEvent {
+  const meta = approvalMeta(scenario)
+  getMockState().pendingApprovals.set(threadId, { ...meta, kind: 'record_payment', payment })
+  return { type: 'approval_required', ...meta, payment }
+}
+
+/** What the backend sends first on an approve or reject, before any model text. */
+function resolvedEvent(
+  request: ChatResumeRequest,
+  outcome: 'approved' | 'rejected' | 'expired',
+  extra: { invoice?: Invoice; payment?: Payment } = {},
+): ChatEvent {
+  return { type: 'approval_resolved', approvalId: request.approvalId, outcome, ...extra }
 }
 
 function overdueSteps(threadId: string): ScriptStep[] {
@@ -92,6 +128,7 @@ export function startChat(message: string, threadId: string, scenario: MockScena
   }
 
   if (/overdue/i.test(message)) return overdueSteps(threadId)
+  if (/payment|received|paid/i.test(message)) return paymentSteps(threadId, scenario)
 
   const draft = buildInvoice({
     id: `inv_draft_${shortId()}`,
@@ -109,7 +146,45 @@ export function startChat(message: string, threadId: string, scenario: MockScena
     { type: 'tool_start', tool: 'lookup_customer' },
     { type: 'tool_end', tool: 'lookup_customer' },
     text('Found them. I have drafted the invoice below for your approval.'),
-    approvalEvent(draft, scenario),
+    approvalEvent(threadId, draft, scenario),
+  ])
+}
+
+/** "Record a payment" skips drafting: it proposes paying the oldest open invoice in full. */
+function paymentSteps(threadId: string, scenario: MockScenario): ScriptStep[] {
+  const state = getMockState()
+  const open = state.records
+    .map((record) => record.invoice)
+    .find(
+      (invoice) =>
+        (invoice.status === 'issued' ||
+          invoice.status === 'partially_paid' ||
+          invoice.status === 'overdue') &&
+        Number(invoice.amountDue) > 0,
+    )
+
+  if (!open) {
+    return eventSteps([
+      { type: 'thread', threadId },
+      text('There are no open invoices to record a payment against.'),
+      { type: 'done' },
+    ])
+  }
+
+  const payment: PaymentApproval = {
+    invoice: open,
+    cashReceived: open.amountDue,
+    tdsDeducted: '0.00',
+    date: isoDate(new Date(), 0),
+    amountDueAfter: '0.00',
+    statusAfter: 'paid',
+  }
+  state.pendingPayments.set(threadId, payment)
+
+  return eventSteps([
+    { type: 'thread', threadId },
+    text('Found the invoice. Please confirm this payment before I record it.'),
+    paymentApprovalEvent(threadId, payment, scenario),
   ])
 }
 
@@ -163,39 +238,98 @@ function isFailure(value: Invoice | Failure): value is Failure {
   return 'ok' in value
 }
 
-/** Applies an approve / reject / edit decision to the pending draft for a thread. */
+function clearPending(threadId: string): void {
+  const state = getMockState()
+  state.pending.delete(threadId)
+  state.pendingPayments.delete(threadId)
+  state.pendingApprovals.delete(threadId)
+}
+
+/** Records the proposed payment on the mock invoice, as `POST /invoices/:id/payments` would. */
+function applyPayment(proposal: PaymentApproval): { invoice: Invoice; payment: Payment } {
+  const record = getMockState().records.find(({ invoice }) => invoice.id === proposal.invoice.id)
+  const invoice = record?.invoice ?? proposal.invoice
+  const payment: Payment = {
+    id: `pay_${shortId()}`,
+    invoiceId: invoice.id,
+    cashReceived: proposal.cashReceived,
+    tdsDeducted: proposal.tdsDeducted,
+    date: proposal.date,
+  }
+  invoice.amountDue = proposal.amountDueAfter
+  invoice.status = proposal.statusAfter
+  record?.payments.push(payment)
+  return { invoice, payment }
+}
+
+/**
+ * Applies an approve / reject / edit decision to the pending draft or payment for a thread.
+ * Mirrors the backend: approve and reject stream `approval_resolved` first, then the model's
+ * closing text; approving an expired approval resolves it as `expired`; editing one is an
+ * HTTP 409 `approval_expired`.
+ */
 export function resolveDecision(request: ChatResumeRequest, scenario: MockScenario): DecisionResult {
   const state = getMockState()
   const { threadId } = request
   const draft = state.pending.get(threadId)
+  const proposedPayment = state.pendingPayments.get(threadId)
   const thread: ChatEvent = { type: 'thread', threadId }
 
-  if (!draft) {
+  if (!draft && !proposedPayment) {
     return failure(404, 'no_pending_approval', 'There is nothing waiting for approval on this thread.')
   }
 
   if (scenario === 'expired') {
-    state.pending.delete(threadId)
+    if (request.decision === 'edit') {
+      return failure(409, 'approval_expired', 'This approval has expired. Reject it and ask again')
+    }
+    clearPending(threadId)
     return {
       ok: true,
       events: [
         thread,
-        {
-          type: 'error',
-          code: 'approval_expired',
-          message: 'This approval has expired. Ask again to create a new draft.',
-        },
+        resolvedEvent(request, 'expired'),
+        text('That approval expired before you confirmed it, so nothing was done.'),
+        { type: 'done' },
       ],
     }
   }
 
   if (request.decision === 'reject') {
-    state.pending.delete(threadId)
+    clearPending(threadId)
     return {
       ok: true,
-      events: [thread, text('Okay, I discarded the draft. Nothing was issued.'), { type: 'done' }],
+      events: [
+        thread,
+        resolvedEvent(request, 'rejected'),
+        text(
+          proposedPayment
+            ? 'Okay, I did not record the payment.'
+            : 'Okay, I discarded the draft. Nothing was issued.',
+        ),
+        { type: 'done' },
+      ],
     }
   }
+
+  if (proposedPayment) {
+    if (request.decision === 'edit') {
+      return failure(422, 'invalid_edit', 'Payment edits are not supported by this mock.')
+    }
+    const { invoice, payment } = applyPayment(proposedPayment)
+    clearPending(threadId)
+    return {
+      ok: true,
+      events: [
+        thread,
+        resolvedEvent(request, 'approved', { invoice, payment }),
+        text(`Done. I recorded the payment against ${invoice.number ?? 'the invoice'}.`),
+        { type: 'done' },
+      ],
+    }
+  }
+
+  if (!draft) return failure(404, 'no_pending_approval', 'There is nothing waiting for approval on this thread.')
 
   if (request.decision === 'edit') {
     if (!request.edits) return failure(422, 'edits_required', 'Edits are required for an edit decision.')
@@ -207,7 +341,7 @@ export function resolveDecision(request: ChatResumeRequest, scenario: MockScenar
       events: [
         thread,
         text('I have updated the draft and recalculated the tax.'),
-        approvalEvent(updated, scenario),
+        approvalEvent(threadId, updated, scenario),
       ],
     }
   }
@@ -224,14 +358,14 @@ export function resolveDecision(request: ChatResumeRequest, scenario: MockScenar
     amountDue: draft.total,
   }
   state.records.unshift({ invoice: issued, payments: [] })
-  state.pending.delete(threadId)
+  clearPending(threadId)
 
   return {
     ok: true,
     events: [
       thread,
+      resolvedEvent(request, 'approved', { invoice: issued }),
       text(`Done. ${issued.number} has been issued.`),
-      { type: 'invoice_issued', invoice: issued },
       { type: 'done' },
     ],
   }

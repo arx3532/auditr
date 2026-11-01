@@ -35,20 +35,6 @@ function bucketBadgeStyle(bucket: string): string {
   return 'border-success/30 bg-success/10 text-success'
 }
 
-function bucketProgressColor(bucket: string): string {
-  if (bucket.includes('90') || bucket.includes('over')) return 'bg-destructive'
-  if (bucket.includes('61')) return 'bg-warning'
-  if (bucket.includes('31')) return 'bg-highlight'
-  return 'bg-success'
-}
-
-function bucketValueColor(bucket: string): string {
-  if (bucket.includes('90') || bucket.includes('over')) return 'text-destructive'
-  if (bucket.includes('61')) return 'text-warning-foreground dark:text-warning'
-  if (bucket.includes('31')) return 'text-highlight-foreground'
-  return 'text-success'
-}
-
 export function ReceivablesAgingView() {
   const query = useReceivablesAgingQuery()
 
@@ -136,4 +122,3 @@ export function ReceivablesAgingView() {
     </div>
   )
 }
-

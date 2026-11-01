@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { LandmarkIcon } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
@@ -67,7 +67,11 @@ interface RecordPaymentFormViewProps {
 
 function RecordPaymentFormView({ invoice, onSuccess, onCancel }: RecordPaymentFormViewProps) {
   const mutation = useRecordPaymentMutation(invoice.id)
-  const keyRef = useRef<string | null>(null)
+  // The key of the last attempt, with a fingerprint of what it sent. A retry of the same
+  // payment reuses the key, so the server can de-duplicate it; changing any field (or the
+  // invoice) is a new decision and gets a new key. Held in state, not a ref, because it is
+  // only read in the submit handler.
+  const [attempt, setAttempt] = useState<{ fingerprint: string; key: string } | null>(null)
 
   const {
     register,
@@ -82,29 +86,26 @@ function RecordPaymentFormView({ invoice, onSuccess, onCancel }: RecordPaymentFo
     },
   })
 
-  // Reset idempotency key when unmounted or opened freshly
-  useEffect(() => {
-    keyRef.current = null
-  }, [invoice.id])
-
   function onSubmit(values: RecordPaymentForm) {
-    keyRef.current ??= createIdempotencyKey()
+    if (mutation.isPending) return
+
+    const body = {
+      cashReceived: values.cashReceived.trim(),
+      tdsDeducted: values.tdsDeducted?.trim() || '0.00',
+      date: values.paidOn,
+    }
+    const fingerprint = JSON.stringify([invoice.id, body])
+    const key = attempt?.fingerprint === fingerprint ? attempt.key : createIdempotencyKey()
+    setAttempt({ fingerprint, key })
 
     mutation.mutate(
-      {
-        body: {
-          cashReceived: values.cashReceived.trim(),
-          tdsDeducted: values.tdsDeducted?.trim() || '0.00',
-          date: values.paidOn,
-        },
-        idempotencyKey: keyRef.current,
-      },
+      { body, idempotencyKey: key },
       {
         onSuccess: (data) => {
           toast.success(
             `Recorded payment of ${formatMoney(data.payment.cashReceived)}. Remaining due: ${formatMoney(data.invoice.amountDue)}`,
           )
-          keyRef.current = null
+          setAttempt(null)
           onSuccess()
         },
         onError: (err) => {
@@ -178,4 +179,3 @@ function RecordPaymentFormView({ invoice, onSuccess, onCancel }: RecordPaymentFo
     </form>
   )
 }
-

@@ -1,4 +1,12 @@
-import type { ChatEvent, DraftEdits, Invoice, ResumeDecision } from '@/lib/api/types'
+import type {
+  ApprovalResolvedEvent,
+  ChatEvent,
+  DraftEdits,
+  Invoice,
+  Payment,
+  PaymentApproval,
+  ResumeDecision,
+} from '@/lib/api/types'
 
 /**
  * idle -> streaming -> awaiting_approval -> resuming -> streaming -> idle, plus error.
@@ -9,20 +17,34 @@ export type ChatStatus = 'idle' | 'streaming' | 'awaiting_approval' | 'resuming'
 export type ApprovalDecisionState =
   | { kind: 'pending' }
   | { kind: 'submitting'; decision: ResumeDecision }
-  | { kind: 'approved'; invoice?: Invoice }
+  /** `invoice` is the issued invoice, or the invoice a payment was recorded against. */
+  | { kind: 'approved'; invoice?: Invoice; payment?: Payment }
   | { kind: 'rejected' }
   | { kind: 'expired' }
 
 type SubmittingState = Extract<ApprovalDecisionState, { kind: 'submitting' }>
 
-export interface ApprovalMessage {
+interface ApprovalMessageBase {
   id: string
   role: 'approval'
   approvalId: string
   expiresAt: string
-  draft: Invoice
   decision: ApprovalDecisionState
 }
+
+/** A draft invoice waiting to be issued. */
+export interface InvoiceApprovalMessage extends ApprovalMessageBase {
+  kind: 'invoice'
+  draft: Invoice
+}
+
+/** A payment waiting to be recorded. */
+export interface PaymentApprovalMessage extends ApprovalMessageBase {
+  kind: 'payment'
+  payment: PaymentApproval
+}
+
+export type ApprovalMessage = InvoiceApprovalMessage | PaymentApprovalMessage
 
 export type ChatMessage =
   | { id: string; role: 'user'; text: string }
@@ -102,6 +124,38 @@ function mapSubmitting(
   )
 }
 
+/** A fresh, undecided approval card for a draft invoice or a payment. */
+function pendingCard(
+  id: string,
+  source: { approvalId: string; expiresAt: string } & (
+    | { draft: Invoice; payment?: undefined }
+    | { payment: PaymentApproval; draft?: undefined }
+  ),
+): ApprovalMessage {
+  const base = {
+    id,
+    role: 'approval',
+    approvalId: source.approvalId,
+    expiresAt: source.expiresAt,
+    decision: { kind: 'pending' },
+  } as const
+  return source.draft
+    ? { ...base, kind: 'invoice', draft: source.draft }
+    : { ...base, kind: 'payment', payment: source.payment }
+}
+
+/** The final card state for a decision the server has resolved. */
+function resolvedDecision(event: ApprovalResolvedEvent): ApprovalDecisionState {
+  switch (event.outcome) {
+    case 'approved':
+      return { kind: 'approved', invoice: event.invoice, payment: event.payment }
+    case 'rejected':
+      return { kind: 'rejected' }
+    case 'expired':
+      return { kind: 'expired' }
+  }
+}
+
 function failWith(state: ChatState, error: ChatError): ChatState {
   const messages = mapSubmitting(state.messages, () => ({ kind: 'pending' }))
 
@@ -176,24 +230,22 @@ function applyEvent(state: ChatState, event: ChatEvent): ChatState {
           activeTool: undefined,
           lastRequest: undefined,
         },
-        (id) => ({
-          id,
-          role: 'approval',
-          approvalId: event.approvalId,
-          expiresAt: event.expiresAt,
-          draft: event.draft,
-          decision: { kind: 'pending' },
-        }),
+        (id) => pendingCard(id, event),
       )
     }
 
-    case 'invoice_issued':
-      return {
-        ...state,
-        messages: mapSubmitting(state.messages, (current) =>
-          current.decision === 'approve' ? { kind: 'approved', invoice: event.invoice } : current,
-        ),
-      }
+    case 'approval_resolved': {
+      // Sent before the model's follow-up text. Settle the card it names, and only that card.
+      const decision = resolvedDecision(event)
+      const messages = state.messages.map((message) =>
+        message.role === 'approval' &&
+        message.approvalId === event.approvalId &&
+        (message.decision.kind === 'submitting' || message.decision.kind === 'pending')
+          ? { ...message, decision }
+          : message,
+      )
+      return { ...state, messages }
+    }
 
     case 'error':
       return event.code === 'approval_expired'
@@ -229,17 +281,17 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       if (state.messages.length > 0) return state
       const { pendingApproval, threadId } = action
       const stateWithThread = state.threadId ? state : { ...state, threadId }
-      if (!pendingApproval.draft) return stateWithThread
+      // A draft and a payment are restored the same way: as a pending card the user can act on.
+      const { approvalId, expiresAt, draft, payment } = pendingApproval
+      const source = draft
+        ? { approvalId, expiresAt, draft }
+        : payment
+          ? { approvalId, expiresAt, payment }
+          : undefined
+      if (!source) return stateWithThread
       return appendMessage(
         { ...stateWithThread, status: 'awaiting_approval' },
-        (id) => ({
-          id,
-          role: 'approval',
-          approvalId: pendingApproval.approvalId,
-          expiresAt: pendingApproval.expiresAt,
-          draft: pendingApproval.draft!,
-          decision: { kind: 'pending' },
-        }),
+        (id) => pendingCard(id, source),
       )
     }
 
@@ -277,7 +329,11 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return applyEvent(state, action.event)
 
     case 'failed':
-      return failWith(state, action.error)
+      // Editing an expired approval is refused with HTTP 409 before any stream opens, so the
+      // expiry arrives here as an error code rather than as an `approval_resolved` event.
+      return action.error.code === 'approval_expired'
+        ? expireApprovals(state)
+        : failWith(state, action.error)
 
     case 'aborted': {
       const messages = mapSubmitting(state.messages, () => ({ kind: 'pending' }))

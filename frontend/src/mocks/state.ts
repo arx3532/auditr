@@ -1,4 +1,10 @@
-import type { ChatEvent, Customer, Invoice, PendingApprovalPayload } from '@/lib/api/types'
+import type {
+  ChatEvent,
+  Customer,
+  Invoice,
+  PaymentApproval,
+  PendingApprovalPayload,
+} from '@/lib/api/types'
 
 import { CUSTOMERS, createInitialRecords, type InvoiceRecord } from './fixtures'
 
@@ -12,6 +18,8 @@ export interface MockState {
   records: InvoiceRecord[]
   /** Drafts awaiting a decision, keyed by thread id. */
   pending: Map<string, Invoice>
+  /** Payments awaiting a decision, keyed by thread id. */
+  pendingPayments: Map<string, PaymentApproval>
   /** Decisions already applied, keyed by Idempotency-Key, so retries replay instead of re-issuing. */
   replays: Map<string, ReplayEntry>
   /** Issue requests already applied, keyed by Idempotency-Key, mapping to the invoice id. */
@@ -30,6 +38,7 @@ function createState(): MockState {
     customers: [...CUSTOMERS],
     records: createInitialRecords(),
     pending: new Map(),
+    pendingPayments: new Map(),
     replays: new Map(),
     issueKeys: new Map(),
     nextInvoiceNumber: 11,

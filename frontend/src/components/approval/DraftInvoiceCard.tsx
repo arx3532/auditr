@@ -11,14 +11,14 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { isEditableDraft } from '@/lib/api/schemas'
 import type { DraftEdits, ResumeDecision } from '@/lib/api/types'
 import { formatMoney, formatRate } from '@/lib/format/money'
-import type { ApprovalDecisionState, ApprovalMessage } from '@/lib/stream/chatState'
+import type { ApprovalDecisionState, InvoiceApprovalMessage } from '@/lib/stream/chatState'
 import { cn } from '@/lib/utils'
 
 import { ApprovalActions } from './ApprovalActions'
 import { EditDraftDialog } from './EditDraftDialog'
 
 interface DraftInvoiceCardProps {
-  approval: ApprovalMessage
+  approval: InvoiceApprovalMessage
   /** A decision may be sent: no request is in flight for this card. */
   canDecide: boolean
   onDecide: (decision: ResumeDecision, edits?: DraftEdits) => void
@@ -34,7 +34,7 @@ const STATE_LABEL: Record<ApprovalDecisionState['kind'], string> = {
   expired: 'Expired',
 }
 
-function announcement(approval: ApprovalMessage): string {
+function announcement(approval: InvoiceApprovalMessage): string {
   const { draft, decision } = approval
   switch (decision.kind) {
     case 'pending':
@@ -52,7 +52,13 @@ function announcement(approval: ApprovalMessage): string {
   }
 }
 
-function Outcome({ approval, onAskAgain }: { approval: ApprovalMessage; onAskAgain?: () => void }) {
+function Outcome({
+  approval,
+  onAskAgain,
+}: {
+  approval: InvoiceApprovalMessage
+  onAskAgain?: () => void
+}) {
   const { decision } = approval
 
   if (decision.kind === 'approved') {

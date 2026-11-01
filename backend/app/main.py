@@ -13,7 +13,14 @@ from app.core.lifespan import lifespan
 from app.db.session import get_db
 
 settings = get_settings()
-app = FastAPI(title="Finance Agent API", lifespan=lifespan)
+is_prod = settings.environment == "production"
+app = FastAPI(
+    title="Finance Agent API",
+    lifespan=lifespan,
+    docs_url=None if is_prod else "/docs",
+    redoc_url=None,
+    openapi_url=None if is_prod else "/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,

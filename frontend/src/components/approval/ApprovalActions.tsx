@@ -13,6 +13,12 @@ interface ApprovalActionsProps {
   /** The card cannot be acted on right now, for example another request is in flight. */
   disabled: boolean
   canEdit: boolean
+  /** Hide the Edit button entirely, for approvals that cannot be edited in the UI. */
+  hideEdit?: boolean
+  /** Primary button text. Defaults to the invoice wording. */
+  confirmLabel?: string
+  /** Accessible name of the button group. */
+  groupLabel?: string
   onConfirm: () => void
   onEdit: () => void
   onReject: () => void
@@ -22,6 +28,9 @@ export function ApprovalActions({
   submitting,
   disabled,
   canEdit,
+  hideEdit = false,
+  confirmLabel = 'Confirm & issue',
+  groupLabel = 'Decide on this draft',
   onConfirm,
   onEdit,
   onReject,
@@ -36,7 +45,7 @@ export function ApprovalActions({
   }, [isSubmitting])
 
   return (
-    <div role="group" aria-label="Decide on this draft" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+    <div role="group" aria-label={groupLabel} className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
       <Button
         ref={confirmRef}
         type="button"
@@ -49,23 +58,25 @@ export function ApprovalActions({
         ) : (
           <CheckIcon className="mr-1.5 size-4 stroke-[2.5]" />
         )}
-        Confirm &amp; issue
+        {confirmLabel}
       </Button>
 
-      <Button
-        type="button"
-        variant="outline"
-        disabled={locked || !canEdit}
-        onClick={onEdit}
-        className="h-10 w-full rounded-xl border-border px-4 text-sm font-medium sm:w-auto"
-      >
-        {submitting === 'edit' ? (
-          <Spinner className="mr-1.5 size-4" />
-        ) : (
-          <PencilIcon className="mr-1.5 size-4" />
-        )}
-        Edit draft
-      </Button>
+      {hideEdit ? null : (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={locked || !canEdit}
+          onClick={onEdit}
+          className="h-10 w-full rounded-xl border-border px-4 text-sm font-medium sm:w-auto"
+        >
+          {submitting === 'edit' ? (
+            <Spinner className="mr-1.5 size-4" />
+          ) : (
+            <PencilIcon className="mr-1.5 size-4" />
+          )}
+          Edit draft
+        </Button>
+      )}
 
       <Button
         type="button"

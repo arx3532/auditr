@@ -7,7 +7,10 @@ import type {
   CreateCustomerRequest,
   CreateInvoiceRequest,
   Customer,
+  RecordPaymentRequest,
   ResumeDecision,
+  UpdateInvoiceRequest,
+  UpdateProfileRequest,
 } from '@/lib/api/types'
 
 import { resolveDecision, startChat } from './chatFlow'
@@ -24,7 +27,7 @@ const DECIMAL = /^\d{1,12}(\.\d{1,2})?$/
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 function errorResponse(status: number, code: string, message: string) {
-  return HttpResponse.json({ code, message }, { status })
+  return HttpResponse.json({ error: { code, message } }, { status })
 }
 
 function sseResponse(steps: ScriptStep[]) {
@@ -218,7 +221,7 @@ export function createHandlers(baseUrl: string) {
         return errorResponse(409, 'invalid_state', 'Only draft invoices can be edited.')
       }
 
-      const body = await readJson<any>(request)
+      const body = await readJson<UpdateInvoiceRequest>(request)
       const customer = body?.customerId
         ? state.customers.find((c) => c.id === body.customerId) ?? record.invoice.customer
         : record.invoice.customer
@@ -230,7 +233,7 @@ export function createHandlers(baseUrl: string) {
         items: body?.items ?? record.invoice.items,
         dueDate: body?.dueDate ?? record.invoice.dueDate,
       })
-      if (body?.lutRef !== undefined) updated.tax.lutRef = body.lutRef
+      if (body?.lutRef !== undefined) updated.tax.lutRef = body.lutRef ?? undefined
       record.invoice = updated
       return HttpResponse.json(record.invoice)
     }),
@@ -265,7 +268,7 @@ export function createHandlers(baseUrl: string) {
       const record = state.records.find(({ invoice }) => invoice.id === params.id)
       if (!record) return errorResponse(404, 'invoice_not_found', 'That invoice does not exist.')
 
-      const body = await readJson<any>(request)
+      const body = await readJson<RecordPaymentRequest>(request)
       const cashReceived = body?.cashReceived ?? '0.00'
       const tdsDeducted = body?.tdsDeducted ?? '0.00'
       const date = body?.date ?? new Date().toISOString().slice(0, 10)
@@ -480,7 +483,7 @@ export function createHandlers(baseUrl: string) {
       if (blocked) return blocked
       await mockSleep(REST_LATENCY_MS)
 
-      const body = await readJson<any>(request)
+      const body = await readJson<UpdateProfileRequest>(request)
       return HttpResponse.json({
         stateCode: body?.stateCode ?? '29',
         businessName: body?.businessName ?? null,

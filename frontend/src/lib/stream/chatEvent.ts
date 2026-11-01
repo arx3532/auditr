@@ -30,11 +30,13 @@ const taxSchema = z.object({
   lutRef: z.string().optional(),
 })
 
+const invoiceStatusSchema = z.enum(['draft', 'issued', 'partially_paid', 'paid', 'overdue', 'cancelled'])
+
 const invoiceSchema = z.object({
   id: z.string(),
   number: z.string().optional(),
   customer: customerSchema,
-  status: z.enum(['draft', 'issued', 'partially_paid', 'paid', 'overdue', 'cancelled']),
+  status: invoiceStatusSchema,
   items: z.array(itemSchema),
   tax: taxSchema,
   subtotal: decimalString,
@@ -45,20 +47,57 @@ const invoiceSchema = z.object({
   publicToken: z.string().optional(),
 })
 
-export const chatEventSchema: z.ZodType<ChatEvent> = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('thread'), threadId: z.string() }),
-  z.object({ type: z.literal('text_delta'), text: z.string() }),
-  z.object({ type: z.literal('tool_start'), tool: z.string() }),
-  z.object({ type: z.literal('tool_end'), tool: z.string() }),
+const paymentSchema = z.object({
+  id: z.string(),
+  invoiceId: z.string(),
+  cashReceived: decimalString,
+  tdsDeducted: decimalString,
+  date: z.string(),
+})
+
+const paymentApprovalSchema = z.object({
+  invoice: invoiceSchema,
+  cashReceived: decimalString,
+  tdsDeducted: decimalString,
+  date: z.string(),
+  amountDueAfter: decimalString,
+  statusAfter: invoiceStatusSchema,
+})
+
+// The backend sends `draft` for an issue-invoice approval and `payment` for a record-payment
+// approval (plus an internal `kind` label we do not need). Exactly one of the two is present.
+const approvalRequiredSchema = z.union([
   z.object({
     type: z.literal('approval_required'),
     approvalId: z.string(),
     expiresAt: z.string(),
     draft: invoiceSchema,
   }),
+  z.object({
+    type: z.literal('approval_required'),
+    approvalId: z.string(),
+    expiresAt: z.string(),
+    payment: paymentApprovalSchema,
+  }),
+])
+
+const approvalResolvedSchema = z.object({
+  type: z.literal('approval_resolved'),
+  approvalId: z.string(),
+  outcome: z.enum(['approved', 'rejected', 'expired']),
+  invoice: invoiceSchema.optional(),
+  payment: paymentSchema.optional(),
+})
+
+export const chatEventSchema: z.ZodType<ChatEvent> = z.union([
+  z.object({ type: z.literal('thread'), threadId: z.string() }),
+  z.object({ type: z.literal('text_delta'), text: z.string() }),
+  z.object({ type: z.literal('tool_start'), tool: z.string() }),
+  z.object({ type: z.literal('tool_end'), tool: z.string() }),
+  approvalRequiredSchema,
+  approvalResolvedSchema,
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
   z.object({ type: z.literal('done') }),
-  z.object({ type: z.literal('invoice_issued'), invoice: invoiceSchema }),
 ])
 
 const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set<ChatEvent['type']>([
@@ -67,9 +106,9 @@ const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set<ChatEvent['type']>([
   'tool_start',
   'tool_end',
   'approval_required',
+  'approval_resolved',
   'error',
   'done',
-  'invoice_issued',
 ])
 
 const INVALID_EVENT_MESSAGE = 'The server sent an event we could not understand.'

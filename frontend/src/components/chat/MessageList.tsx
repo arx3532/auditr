@@ -4,6 +4,7 @@ import { ArrowDownIcon } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { DraftInvoiceCard } from '@/components/approval/DraftInvoiceCard'
+import { PaymentApprovalCard } from '@/components/approval/PaymentApprovalCard'
 import type { DraftEdits, ResumeDecision } from '@/lib/api/types'
 import type { ChatMessage } from '@/lib/stream/chatState'
 
@@ -53,9 +54,12 @@ export function MessageList({ messages, canDecide, onDecide, onAskAgain }: Messa
         tabIndex={0}
         className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto rounded-lg py-2 pr-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        {messages.map((message) =>
-          message.role === 'approval' ? (
-            <DraftInvoiceCard
+        {messages.map((message) => {
+          if (message.role !== 'approval') {
+            return <MessageBubble key={message.id} role={message.role} text={message.text} />
+          }
+          return message.kind === 'payment' ? (
+            <PaymentApprovalCard
               key={message.id}
               approval={message}
               canDecide={canDecide}
@@ -63,9 +67,15 @@ export function MessageList({ messages, canDecide, onDecide, onAskAgain }: Messa
               onAskAgain={onAskAgain}
             />
           ) : (
-            <MessageBubble key={message.id} role={message.role} text={message.text} />
-          ),
-        )}
+            <DraftInvoiceCard
+              key={message.id}
+              approval={message}
+              canDecide={canDecide}
+              onDecide={onDecide}
+              onAskAgain={onAskAgain}
+            />
+          )
+        })}
         <div ref={endRef} aria-hidden="true" />
       </div>
 

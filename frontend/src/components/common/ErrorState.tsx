@@ -12,9 +12,10 @@ interface ErrorStateProps {
   title?: string
   className?: string
   /**
-   * When true, non-network errors show a plain "No data available" empty state
-   * instead of a destructive alert. Network errors always show the alert so the
-   * user knows to check their connection.
+   * When true, a 404 Not Found shows a plain "No data available" empty state instead of a
+   * destructive alert. Every other failure (network, 4xx, 5xx, unexpected) always shows its
+   * real message, with Retry where retrying can help, so a server fault is never disguised
+   * as an empty section.
    */
   noDataFallback?: boolean
 }
@@ -29,10 +30,9 @@ export function ErrorState({
   noDataFallback = false,
 }: ErrorStateProps) {
   const apiErr = isApiError(error) ? error : null
-  const isNetworkError = apiErr?.kind === 'network'
 
-  // Non-network errors (4xx, 5xx, unexpected): show a neutral empty state.
-  if (noDataFallback && !isNetworkError) {
+  // Only "not found" means there is legitimately nothing to show.
+  if (noDataFallback && apiErr?.kind === 'not_found') {
     return (
       <EmptyState
         title="No data available"
@@ -47,7 +47,7 @@ export function ErrorState({
     )
   }
 
-  // Network errors (or noDataFallback=false): show the destructive alert.
+  // Everything else: show the real error.
   const message = apiErr ? apiErr.message : FALLBACK_MESSAGE
   const canRetry = onRetry !== undefined && (!apiErr || apiErr.retryable)
 

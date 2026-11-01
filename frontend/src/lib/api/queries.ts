@@ -18,7 +18,6 @@ import type {
 import type { DateRangeParams } from './endpoints'
 
 import { useApi } from './useApi'
-import { createIdempotencyKey } from '@/lib/idempotency'
 
 /** Queries wait for Clerk to load so a not-yet-hydrated session is never mistaken for signed out. */
 function useSessionReady(): boolean {
@@ -366,42 +365,4 @@ export function downloadCsvBlob(blob: Blob, filename = 'export.csv'): void {
   a.click()
   document.body.removeChild(a)
   window.URL.revokeObjectURL(url)
-}
-
-/**
- * Downloads a CSV file from the given Response and triggers a browser Save dialog.
- */
-export async function downloadCsvResponse(response: Response): Promise<void> {
-  const blob = await response.blob()
-  const disposition = response.headers.get('Content-Disposition') ?? ''
-  const match = /filename="?([^"]+)"?/.exec(disposition)
-  const filename = match?.[1] ?? 'export.csv'
-  downloadCsvBlob(blob, filename)
-}
-
-// ---------------------------------------------------------------------------
-// Chat thread query
-// ---------------------------------------------------------------------------
-
-/**
- * Fetches the server-side thread state for a given threadId (GET /chat/threads/:id).
- *
- * Used to rehydrate a pending approval after a page refresh. Only enabled when a
- * threadId is present. The query is intentionally kept non-reactive (no refetch on
- * window focus) — once the approval is rehydrated the SSE stream takes over.
- */
-export function useThreadQuery(threadId: string | undefined) {
-  const api = useApi()
-  const enabled = useSessionReady() && Boolean(threadId)
-
-  return useQuery({
-    queryKey: ['thread', threadId],
-    queryFn: ({ signal }) => api.getThread(threadId!, signal),
-    enabled,
-    // Don't refetch while the user is interacting — SSE is the live source of truth.
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    staleTime: 0,
-    gcTime: 0,
-  })
 }

@@ -16,8 +16,12 @@ const amountSchema = z
   .regex(/^\d{1,12}(\.\d{1,2})?$/, 'Enter an amount such as 50000 or 50000.00')
   .refine((value) => /[1-9]/.test(value), 'Amount must be greater than zero')
 
-/** GST slabs offered in forms. The server decides what each rate means for tax. */
-export const GST_RATES = ['0', '5', '12', '18', '28'] as const
+/**
+ * GST rates offered in forms. These are the rates the backend accepts (`allowed_gst_rates` in
+ * its tax rules); it rejects anything else, so do not add a rate here without the backend.
+ * The server decides what each rate means for tax.
+ */
+export const GST_RATES = ['0', '5', '18', '40'] as const
 
 // ---------------------------------------------------------------------------
 // Draft-edit form  (one item — only active when draft.items.length === 1)
