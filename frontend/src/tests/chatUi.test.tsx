@@ -5,10 +5,15 @@ import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DraftInvoiceCard } from '@/components/approval/DraftInvoiceCard'
+import { PaymentApprovalCard } from '@/components/approval/PaymentApprovalCard'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import { Composer } from '@/components/chat/Composer'
-import type { Invoice } from '@/lib/api/types'
-import type { ApprovalDecisionState, ApprovalMessage } from '@/lib/stream/chatState'
+import type { Invoice, PaymentApproval } from '@/lib/api/types'
+import type {
+  ApprovalDecisionState,
+  InvoiceApprovalMessage,
+  PaymentApprovalMessage,
+} from '@/lib/stream/chatState'
 import { formatMoney } from '@/lib/format/money'
 
 vi.mock('@clerk/nextjs', () => ({
@@ -36,16 +41,127 @@ const DRAFT: Invoice = {
   dueDate: '2026-11-15',
 }
 
-function approval(decision: ApprovalDecisionState, draft: Invoice = DRAFT): ApprovalMessage {
+function approval(decision: ApprovalDecisionState, draft: Invoice = DRAFT): InvoiceApprovalMessage {
   return {
     id: 'm1',
     role: 'approval',
+    kind: 'invoice',
     approvalId: 'apr_1',
     expiresAt: '2026-10-25T10:00:00.000Z',
     draft,
     decision,
   }
 }
+
+const ISSUED: Invoice = {
+  ...DRAFT,
+  id: 'inv_0005',
+  number: 'INV-0005',
+  status: 'issued',
+  amountDue: '59000.00',
+}
+
+const PAYMENT: PaymentApproval = {
+  invoice: ISSUED,
+  cashReceived: '53100.00',
+  tdsDeducted: '5900.00',
+  date: '2026-11-01',
+  amountDueAfter: '0.00',
+  statusAfter: 'paid',
+}
+
+function paymentApproval(decision: ApprovalDecisionState): PaymentApprovalMessage {
+  return {
+    id: 'm2',
+    role: 'approval',
+    kind: 'payment',
+    approvalId: 'apr_pay',
+    expiresAt: '2026-10-25T10:00:00.000Z',
+    payment: PAYMENT,
+    decision,
+  }
+}
+
+describe('PaymentApprovalCard', () => {
+  it('shows the payment exactly as the server previewed it', () => {
+    renderWithQuery(
+      <PaymentApprovalCard approval={paymentApproval({ kind: 'pending' })} canDecide onDecide={vi.fn()} />,
+    )
+
+    expect(screen.getByRole('region', { name: 'Record Payment' })).toBeInTheDocument()
+    expect(screen.getByText('INV-0005')).toBeInTheDocument()
+    expect(screen.getByText('AdTech Solutions Pvt Ltd')).toBeInTheDocument()
+    expect(screen.getByText(formatMoney('53100.00'))).toBeInTheDocument()
+    expect(screen.getByText(formatMoney('5900.00'))).toBeInTheDocument()
+    expect(screen.getByText(formatMoney('0.00'))).toBeInTheDocument()
+    expect(screen.getByText('Paid')).toBeInTheDocument()
+  })
+
+  it('offers confirm and reject, but no draft editing', async () => {
+    const onDecide = vi.fn()
+    const user = userEvent.setup()
+    renderWithQuery(
+      <PaymentApprovalCard approval={paymentApproval({ kind: 'pending' })} canDecide onDecide={onDecide} />,
+    )
+
+    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /confirm & record/i }))
+    expect(onDecide).toHaveBeenLastCalledWith('approve')
+    await user.click(screen.getByRole('button', { name: /reject/i }))
+    expect(onDecide).toHaveBeenLastCalledWith('reject')
+  })
+
+  it('locks every button while a decision is being sent', () => {
+    renderWithQuery(
+      <PaymentApprovalCard
+        approval={paymentApproval({ kind: 'submitting', decision: 'approve' })}
+        canDecide
+        onDecide={vi.fn()}
+      />,
+    )
+    for (const name of [/confirm/i, /reject/i]) {
+      expect(screen.getByRole('button', { name })).toBeDisabled()
+    }
+  })
+
+  it('links to the invoice the server returned once approved', () => {
+    renderWithQuery(
+      <PaymentApprovalCard
+        approval={paymentApproval({
+          kind: 'approved',
+          invoice: { ...ISSUED, status: 'paid', amountDue: '0.00' },
+        })}
+        canDecide
+        onDecide={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/payment recorded against invoice #INV-0005/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /view invoice/i })).toHaveAttribute('href', '/invoices/inv_0005')
+    expect(screen.queryByRole('button', { name: /confirm/i })).not.toBeInTheDocument()
+  })
+
+  it('says nothing was recorded after a rejection', () => {
+    renderWithQuery(
+      <PaymentApprovalCard approval={paymentApproval({ kind: 'rejected' })} canDecide onDecide={vi.fn()} />,
+    )
+    expect(screen.getAllByText(/nothing was recorded/i).length).toBeGreaterThan(0)
+  })
+
+  it('offers Ask again when the approval has expired', async () => {
+    const onAskAgain = vi.fn()
+    const user = userEvent.setup()
+    renderWithQuery(
+      <PaymentApprovalCard
+        approval={paymentApproval({ kind: 'expired' })}
+        canDecide
+        onDecide={vi.fn()}
+        onAskAgain={onAskAgain}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: /ask again/i }))
+    expect(onAskAgain).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('DraftInvoiceCard', () => {
   it('shows the draft exactly as the server sent it', () => {

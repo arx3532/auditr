@@ -165,8 +165,8 @@ describe('useChatStream', () => {
     resumeChat.mockResolvedValueOnce(
       eventsResponse([
         thread,
+        { type: 'approval_resolved', approvalId: 'apr_1', outcome: 'approved', invoice: draft },
         { type: 'text_delta', text: 'Done.' },
-        { type: 'invoice_issued', invoice: draft },
         { type: 'done' },
       ]),
     )

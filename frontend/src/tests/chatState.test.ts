@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ChatEvent } from '@/lib/api/types'
+import type { ChatEvent, PaymentApproval } from '@/lib/api/types'
 import {
   chatReducer,
   findPendingApproval,
@@ -26,6 +26,15 @@ const approval = (approvalId: string): ChatEvent => ({
   expiresAt: '2030-01-01T00:00:00Z',
   draft,
 })
+
+const paymentProposal: PaymentApproval = {
+  invoice: { ...draft, status: 'issued' },
+  cashReceived: '10000.00',
+  tdsDeducted: '1000.00',
+  date: '2026-11-01',
+  amountDueAfter: '0.00',
+  statusAfter: 'paid',
+}
 
 const awaitingApproval = run([
   { type: 'send_started', text: 'Invoice AdTech' },
@@ -91,11 +100,128 @@ describe('chatReducer', () => {
     expect(streaming.status).toBe('streaming')
 
     const issued = run(
-      [event({ type: 'invoice_issued', invoice: draft }), event({ type: 'done' })],
+      [
+        event({ type: 'approval_resolved', approvalId: 'apr_1', outcome: 'approved', invoice: draft }),
+        event({ type: 'done' }),
+      ],
       streaming,
     )
     expect(issued.status).toBe('idle')
     expect(issued.messages.at(-1)).toMatchObject({ decision: { kind: 'approved', invoice: draft } })
+  })
+
+  it('settles only the card named by approval_resolved', () => {
+    const resuming = chatReducer(awaitingApproval, { type: 'decision_started', decision: 'approve' })
+    const other = chatReducer(
+      resuming,
+      event({ type: 'approval_resolved', approvalId: 'apr_other', outcome: 'approved', invoice: draft }),
+    )
+    expect(other.messages.at(-1)).toMatchObject({ decision: { kind: 'submitting' } })
+  })
+
+  it('shows rejected and expired outcomes from approval_resolved', () => {
+    const resuming = chatReducer(awaitingApproval, { type: 'decision_started', decision: 'reject' })
+    const rejected = run(
+      [event({ type: 'approval_resolved', approvalId: 'apr_1', outcome: 'rejected' }), event({ type: 'done' })],
+      resuming,
+    )
+    expect(rejected.status).toBe('idle')
+    expect(rejected.messages.at(-1)).toMatchObject({ decision: { kind: 'rejected' } })
+
+    const expired = run(
+      [event({ type: 'approval_resolved', approvalId: 'apr_1', outcome: 'expired' }), event({ type: 'done' })],
+      chatReducer(awaitingApproval, { type: 'decision_started', decision: 'approve' }),
+    )
+    expect(expired.status).toBe('idle')
+    expect(expired.messages.at(-1)).toMatchObject({ decision: { kind: 'expired' } })
+  })
+
+  it('shows a record-payment approval as a payment card and waits for a decision', () => {
+    const state = run([
+      { type: 'send_started', text: 'Record payment' },
+      event({ type: 'thread', threadId: 'thr_2' }),
+      event({
+        type: 'approval_required',
+        approvalId: 'apr_pay',
+        expiresAt: '2030-01-01T00:00:00Z',
+        payment: paymentProposal,
+      }),
+      event({ type: 'done' }),
+    ])
+    expect(state.status).toBe('awaiting_approval')
+    expect(findPendingApproval(state.messages)).toMatchObject({
+      kind: 'payment',
+      approvalId: 'apr_pay',
+      payment: paymentProposal,
+      decision: { kind: 'pending' },
+    })
+  })
+
+  it('keeps the recorded payment and invoice when a payment approval is approved', () => {
+    const payment = {
+      id: 'pay_1',
+      invoiceId: draft.id,
+      cashReceived: '10000.00',
+      tdsDeducted: '1000.00',
+      date: '2026-11-01',
+    }
+    const paid = { ...draft, status: 'paid' as const, amountDue: '0.00' }
+    const state = run([
+      event({
+        type: 'approval_required',
+        approvalId: 'apr_pay',
+        expiresAt: '2030-01-01T00:00:00Z',
+        payment: paymentProposal,
+      }),
+      { type: 'decision_started', decision: 'approve' },
+      event({ type: 'approval_resolved', approvalId: 'apr_pay', outcome: 'approved', invoice: paid, payment }),
+      event({ type: 'done' }),
+    ])
+    expect(state.messages.at(-1)).toMatchObject({
+      kind: 'payment',
+      decision: { kind: 'approved', invoice: paid, payment },
+    })
+  })
+
+  it('restores a pending draft or payment after a refresh', () => {
+    const fromDraft = chatReducer(initialChatState, {
+      type: 'rehydrate',
+      threadId: 'thr_1',
+      pendingApproval: { approvalId: 'apr_1', kind: 'issue_invoice', expiresAt: '2030-01-01T00:00:00Z', draft },
+    })
+    expect(fromDraft.status).toBe('awaiting_approval')
+    expect(findPendingApproval(fromDraft.messages)).toMatchObject({ kind: 'invoice', draft })
+
+    const fromPayment = chatReducer(initialChatState, {
+      type: 'rehydrate',
+      threadId: 'thr_2',
+      pendingApproval: {
+        approvalId: 'apr_pay',
+        kind: 'record_payment',
+        expiresAt: '2030-01-01T00:00:00Z',
+        payment: paymentProposal,
+      },
+    })
+    expect(fromPayment.threadId).toBe('thr_2')
+    expect(fromPayment.status).toBe('awaiting_approval')
+    expect(findPendingApproval(fromPayment.messages)).toMatchObject({
+      kind: 'payment',
+      approvalId: 'apr_pay',
+      payment: paymentProposal,
+    })
+  })
+
+  it('expires the open card when the server refuses a decision with approval_expired', () => {
+    const state = run(
+      [
+        { type: 'decision_started', decision: 'edit' },
+        { type: 'failed', error: { code: 'approval_expired', message: 'Expired.', retryable: false } },
+      ],
+      awaitingApproval,
+    )
+    expect(state.status).toBe('idle')
+    expect(state.error).toBeUndefined()
+    expect(state.messages.at(-1)).toMatchObject({ decision: { kind: 'expired' } })
   })
 
   it('marks the card rejected after a reject decision completes', () => {
@@ -170,7 +296,7 @@ describe('chatReducer', () => {
       [
         { type: 'decision_started', decision: 'approve' },
         { type: 'stream_opened' },
-        event({ type: 'invoice_issued', invoice: draft }),
+        event({ type: 'approval_resolved', approvalId: 'apr_1', outcome: 'approved', invoice: draft }),
         { type: 'failed', error: { code: 'stream_dropped', message: 'Dropped.', retryable: true } },
       ],
       awaitingApproval,

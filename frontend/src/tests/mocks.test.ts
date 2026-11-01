@@ -200,7 +200,11 @@ describe('chat stream', () => {
         'key-expired',
       ),
     )
-    expect(resumed.at(-1)).toMatchObject({ type: 'error', code: 'approval_expired' })
+    expect(resumed.find((event) => event.type === 'approval_resolved')).toMatchObject({
+      approvalId: approval.approvalId,
+      outcome: 'expired',
+    })
+    expect(resumed.at(-1)).toEqual({ type: 'done' })
   })
 })
 
@@ -211,9 +215,11 @@ describe('chat resume', () => {
       await api.resumeChat({ threadId, approvalId, decision: 'approve' }, 'key-approve'),
     )
 
-    const issued = events.find((event) => event.type === 'invoice_issued')
-    if (issued?.type !== 'invoice_issued') throw new Error('Expected invoice_issued')
-    expect(issued.invoice).toMatchObject({ number: 'INV-0011', status: 'issued', amountDue: '59000.00' })
+    const resolved = events.find((event) => event.type === 'approval_resolved')
+    if (resolved?.type !== 'approval_resolved') throw new Error('Expected approval_resolved')
+    expect(resolved).toMatchObject({ approvalId, outcome: 'approved' })
+    expect(resolved.invoice).toMatchObject({ number: 'INV-0011', status: 'issued', amountDue: '59000.00' })
+    expect(events.some((event) => (event.type as string) === 'invoice_issued')).toBe(false)
     expect(events.at(-1)).toEqual({ type: 'done' })
 
     const { items } = await api.listInvoices()
@@ -295,13 +301,103 @@ describe('chat resume', () => {
     const events = await readEvents(
       await api.resumeChat({ threadId, approvalId, decision: 'reject' }, 'key-reject'),
     )
+    expect(events.find((event) => event.type === 'approval_resolved')).toMatchObject({
+      approvalId,
+      outcome: 'rejected',
+    })
     expect(events.at(-1)).toEqual({ type: 'done' })
     expect((await api.listInvoices()).items.some((invoice) => invoice.number === 'INV-0011')).toBe(false)
+  })
+
+  it('answers a validation failure with the backend { error } body shape', async () => {
+    const { threadId, approvalId } = await startDraft()
+    const response = await fetch('http://api.test/chat/resume', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'key-shape',
+      },
+      body: JSON.stringify({ threadId, approvalId, decision: 'edit', edits: { items: [] } }),
+    })
+    expect(response.status).toBe(422)
+    expect(await response.json()).toEqual({
+      error: { code: 'invalid_items', message: 'At least one line item is required.' },
+    })
   })
 
   it('answers 404 when nothing is pending for the thread', async () => {
     await expect(
       api.resumeChat({ threadId: 'thr_unknown', approvalId: 'apr_unknown', decision: 'approve' }, 'key-none'),
     ).rejects.toMatchObject({ kind: 'not_found', code: 'no_pending_approval' })
+  })
+})
+
+describe('record-payment approval flow', () => {
+  async function startPayment() {
+    const events = await readEvents(await api.startChat({ message: 'I received the payment' }))
+    const thread = events.find((event) => event.type === 'thread')
+    const approval = events.find((event) => event.type === 'approval_required')
+    if (thread?.type !== 'thread' || approval?.type !== 'approval_required') {
+      throw new Error('Expected a thread and a payment approval')
+    }
+    return { events, threadId: thread.threadId, approval }
+  }
+
+  it('asks for approval with a payment object and no draft', async () => {
+    const { events, approval } = await startPayment()
+    expect(approval.draft).toBeUndefined()
+    expect(approval.payment).toMatchObject({
+      tdsDeducted: '0.00',
+      amountDueAfter: '0.00',
+      statusAfter: 'paid',
+    })
+    expect(approval.payment?.cashReceived).toBe(approval.payment?.invoice.amountDue)
+    expect(events.at(-1)).toBe(approval)
+  })
+
+  it('exposes the pending payment for rehydration after a refresh', async () => {
+    const { threadId, approval } = await startPayment()
+    const view = await api.getThread(threadId)
+    expect(view.pendingApproval).toMatchObject({
+      approvalId: approval.approvalId,
+      kind: 'record_payment',
+      payment: { statusAfter: 'paid' },
+    })
+  })
+
+  it('records the payment on approve and reports it in approval_resolved', async () => {
+    const { threadId, approval } = await startPayment()
+    const invoiceId = approval.payment?.invoice.id ?? ''
+    const events = await readEvents(
+      await api.resumeChat(
+        { threadId, approvalId: approval.approvalId, decision: 'approve' },
+        'key-pay-approve',
+      ),
+    )
+    const resolved = events.find((event) => event.type === 'approval_resolved')
+    if (resolved?.type !== 'approval_resolved') throw new Error('Expected approval_resolved')
+    expect(resolved).toMatchObject({ outcome: 'approved', invoice: { id: invoiceId, status: 'paid' } })
+    expect(resolved.payment).toMatchObject({ invoiceId, tdsDeducted: '0.00' })
+
+    const payments = await api.listInvoicePayments(invoiceId)
+    expect(payments.some((payment) => payment.id === resolved.payment?.id)).toBe(true)
+    expect((await api.getThread(threadId)).pendingApproval).toBeNull()
+  })
+
+  it('records nothing on reject', async () => {
+    const { threadId, approval } = await startPayment()
+    const invoiceId = approval.payment?.invoice.id ?? ''
+    const before = (await api.listInvoicePayments(invoiceId)).length
+    const events = await readEvents(
+      await api.resumeChat(
+        { threadId, approvalId: approval.approvalId, decision: 'reject' },
+        'key-pay-reject',
+      ),
+    )
+    expect(events.find((event) => event.type === 'approval_resolved')).toMatchObject({
+      outcome: 'rejected',
+    })
+    expect((await api.listInvoicePayments(invoiceId)).length).toBe(before)
   })
 })

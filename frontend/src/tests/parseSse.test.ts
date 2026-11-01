@@ -175,9 +175,36 @@ describe('decodeChatEvent', () => {
       { type: 'tool_start', tool: 'lookup_customer' },
       { type: 'tool_end', tool: 'lookup_customer' },
       { type: 'approval_required', approvalId: 'apr_1', expiresAt: '2030-01-01T00:00:00Z', draft: invoice },
+      {
+        type: 'approval_required',
+        approvalId: 'apr_2',
+        expiresAt: '2030-01-01T00:00:00Z',
+        payment: {
+          invoice,
+          cashReceived: '100.00',
+          tdsDeducted: '10.00',
+          date: '2030-01-01',
+          amountDueAfter: '0.00',
+          statusAfter: 'paid',
+        },
+      },
+      { type: 'approval_resolved', approvalId: 'apr_1', outcome: 'approved', invoice },
+      {
+        type: 'approval_resolved',
+        approvalId: 'apr_2',
+        outcome: 'approved',
+        invoice,
+        payment: {
+          id: 'pay_1',
+          invoiceId: invoice.id,
+          cashReceived: '100.00',
+          tdsDeducted: '10.00',
+          date: '2030-01-01',
+        },
+      },
+      { type: 'approval_resolved', approvalId: 'apr_3', outcome: 'rejected' },
       { type: 'error', code: 'upstream_unavailable', message: 'Try again.' },
       { type: 'done' },
-      { type: 'invoice_issued', invoice },
     ]
     for (const event of events) {
       expect(decodeChatEvent(JSON.stringify(event))).toEqual(event)
@@ -188,6 +215,58 @@ describe('decodeChatEvent', () => {
     expect(decodeChatEvent('')).toBeNull()
     expect(decodeChatEvent('   ')).toBeNull()
     expect(decodeChatEvent('{"type":"future_event","anything":true}')).toBeNull()
+  })
+
+  it('ignores invoice_issued, which the backend never sends', () => {
+    expect(decodeChatEvent(JSON.stringify({ type: 'invoice_issued', invoice }))).toBeNull()
+  })
+
+  it('decodes the backend approval_required payload, including its extra kind label', () => {
+    const wire = {
+      type: 'approval_required',
+      approvalId: 'apr_1',
+      kind: 'issue_invoice',
+      expiresAt: '2030-01-01T00:00:00+00:00',
+      draft: invoice,
+    }
+    const decoded = decodeChatEvent(JSON.stringify(wire))
+    expect(decoded).toMatchObject({ type: 'approval_required', draft: JSON.parse(JSON.stringify(invoice)) })
+    expect(decoded).not.toHaveProperty('kind')
+  })
+
+  it('decodes a record_payment approval exactly as the backend builds it', () => {
+    // Shape of `build_approval_payload` for kind "record_payment", sent through `approval_required`.
+    const wire = {
+      type: 'approval_required',
+      approvalId: '6f1c1b0e-3a57-4c43-9d0e-2b6f0f7a9c11',
+      kind: 'record_payment',
+      expiresAt: '2026-11-01T10:15:00.123456+00:00',
+      payment: {
+        invoice: { ...invoice, status: 'issued' },
+        cashReceived: '53100.00',
+        tdsDeducted: '5900.00',
+        date: '2026-11-01',
+        amountDueAfter: '0.00',
+        statusAfter: 'paid',
+      },
+    }
+    const decoded = decodeChatEvent(JSON.stringify(wire))
+    expect(decoded).toMatchObject({
+      type: 'approval_required',
+      approvalId: wire.approvalId,
+      payment: { cashReceived: '53100.00', statusAfter: 'paid' },
+    })
+    expect(decoded).not.toHaveProperty('draft')
+  })
+
+  it('rejects an approval_required event with neither a draft nor a payment', () => {
+    const payload = JSON.stringify({ type: 'approval_required', approvalId: 'a', expiresAt: 'x' })
+    expect(() => decodeChatEvent(payload)).toThrow(StreamProtocolError)
+  })
+
+  it('rejects an approval_resolved event with an unknown outcome', () => {
+    const payload = JSON.stringify({ type: 'approval_resolved', approvalId: 'a', outcome: 'maybe' })
+    expect(() => decodeChatEvent(payload)).toThrow(StreamProtocolError)
   })
 
   it('throws StreamProtocolError for malformed payloads', () => {

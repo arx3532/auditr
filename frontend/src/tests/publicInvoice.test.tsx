@@ -6,7 +6,7 @@ import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { PublicInvoiceView } from '@/components/public/PublicInvoiceView'
-import type { Invoice } from '@/lib/api/types'
+import type { PublicInvoice } from '@/lib/api/types'
 import { REVOKED_PUBLIC_TOKEN } from '@/mocks/fixtures'
 import { server } from '@/mocks/server'
 
@@ -21,11 +21,12 @@ function renderWithQuery(ui: ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 
-function invoiceWith(overrides: Partial<Invoice>): Invoice {
+/** Mirrors `PublicInvoiceOut`: no ids, no GSTIN, just the customer's name. */
+function invoiceWith(overrides: Partial<PublicInvoice>): PublicInvoice {
   return {
-    id: 'inv_public',
     number: 'INV-0100',
-    customer: { id: 'cust_1', name: 'Public Test Customer' },
+    supplierName: 'Public Test Supplier',
+    customerName: 'Public Test Customer',
     status: 'issued',
     items: [{ description: 'Brand identity design', taxableValue: '50000.00', gstRate: '18' }],
     tax: { cgst: '4500.00', sgst: '4500.00' },
@@ -34,20 +35,19 @@ function invoiceWith(overrides: Partial<Invoice>): Invoice {
     amountDue: '59000.00',
     issueDate: '2026-10-01',
     dueDate: '2026-10-15',
-    publicToken: 'tok_public',
     ...overrides,
   }
 }
 
 describe('PublicInvoiceView', () => {
-  it('renders an invoice from the mock API with the amount, due date and UPI placeholder', async () => {
+  it('renders an invoice from the mock API with the amount and due date', async () => {
     renderWithQuery(<PublicInvoiceView token="pubtok-inv-0005" />)
 
     expect(await screen.findByRole('heading', { level: 1, name: /INV-0005/ })).toBeInTheDocument()
     expect(screen.getByText('Amount due')).toBeInTheDocument()
     expect(screen.getByText('Due date')).toBeInTheDocument()
-    expect(screen.getByText('Pay with UPI')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open UPI app' })).toBeDisabled()
+    // The contract has no UPI payee field, so the page offers no payment controls.
+    expect(screen.queryByText(/UPI/)).not.toBeInTheDocument()
   })
 
   it('shows money exactly as the server sent it, with Indian grouping and no recalculation', async () => {
@@ -63,22 +63,21 @@ describe('PublicInvoiceView', () => {
     expect(screen.getByText('SGST')).toBeInTheDocument()
   })
 
-  it('does not show a GSTIN or internal ids for the customer', async () => {
+  it('shows the customer name and supplier only, with no GSTIN or internal ids', async () => {
     server.use(
       http.get('http://api.test/public/invoices/tok_public', () =>
-        HttpResponse.json(
-          invoiceWith({ customer: { id: 'cust_1', name: 'Public Test Customer', gstin: '29AAAAA0000A1Z5' } }),
-        ),
+        HttpResponse.json(invoiceWith({})),
       ),
     )
     renderWithQuery(<PublicInvoiceView token="tok_public" />)
 
     expect(await screen.findByText('Billed to Public Test Customer')).toBeInTheDocument()
-    expect(screen.queryByText(/29AAAAA0000A1Z5/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/cust_1/)).not.toBeInTheDocument()
+    expect(screen.getByText('From Public Test Supplier')).toBeInTheDocument()
+    expect(screen.queryByText(/\d{2}[A-Z]{5}\d{4}[A-Z]/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/cust_1|inv_public/)).not.toBeInTheDocument()
   })
 
-  it('shows a paid notice and hides the UPI block for a paid invoice', async () => {
+  it('shows a paid notice for a paid invoice', async () => {
     server.use(
       http.get('http://api.test/public/invoices/tok_public', () =>
         HttpResponse.json(invoiceWith({ status: 'paid', amountDue: '0.00' })),
@@ -87,10 +86,9 @@ describe('PublicInvoiceView', () => {
     renderWithQuery(<PublicInvoiceView token="tok_public" />)
 
     expect(await screen.findByText('This invoice has been paid')).toBeInTheDocument()
-    expect(screen.queryByText('Pay with UPI')).not.toBeInTheDocument()
   })
 
-  it('warns against paying a cancelled invoice and hides the UPI block', async () => {
+  it('warns against paying a cancelled invoice', async () => {
     server.use(
       http.get('http://api.test/public/invoices/tok_public', () =>
         HttpResponse.json(invoiceWith({ status: 'cancelled' })),
@@ -99,7 +97,6 @@ describe('PublicInvoiceView', () => {
     renderWithQuery(<PublicInvoiceView token="tok_public" />)
 
     expect(await screen.findByText('This invoice was cancelled')).toBeInTheDocument()
-    expect(screen.queryByText('Pay with UPI')).not.toBeInTheDocument()
   })
 
   it('renders server text as plain text, never as HTML', async () => {
